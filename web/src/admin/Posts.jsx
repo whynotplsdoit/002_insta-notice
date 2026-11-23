@@ -1,9 +1,10 @@
-// 글 분류 고치기: 분류·상품 종류·작품·일정 직접 수정, 글 숨기기
+// 글 분류 고치기: 분류·상품 종류·작품·일정 직접 수정, 글 완전 삭제
 // 직접 고친 글은 "수정함" 표시가 붙고 크롤러가 자동 분류로 덮어쓰지 않습니다.
 import { useCallback, useEffect, useState } from 'react'
 import { imageUrl, supabase } from '../supabase.js'
 import { titleOf } from '../format.js'
 import { CATEGORIES, GOODS_TYPES, fmtTime, fromKstDate, fromList, toKstDate, toList } from './util.js'
+import { deletePost } from './deletePost.js'
 
 const PAGE = 50
 
@@ -30,7 +31,7 @@ export default function Posts() {
     if (shop) query = query.eq('account_username', shop)
     if (category) query = query.eq('category', category)
     if (only === 'manual') query = query.eq('manual', true)
-    if (only === 'hidden') query = query.eq('hidden', true)
+    if (only === 'review') query = query.eq('needs_review', true)
     if (q.trim()) query = query.ilike('caption', `%${q.trim()}%`)
     const { data } = await query
     setRows(data ?? [])
@@ -64,7 +65,7 @@ export default function Posts() {
         <select className="a-input" value={only} onChange={(e) => setOnly(e.target.value)}>
           <option value="">전체 글</option>
           <option value="manual">직접 고친 글</option>
-          <option value="hidden">숨긴 글</option>
+          <option value="review">검토 대기 글</option>
         </select>
       </div>
 
@@ -73,7 +74,7 @@ export default function Posts() {
       {rows && rows.length > 0 && (
         <div className="a-card a-list">
           {rows.map((p) => (
-            <div key={p.code} className={p.hidden ? 'is-hidden' : ''}>
+            <div key={p.code}>
               <button className="a-row a-row-btn a-post-row" onClick={() => setOpenCode(openCode === p.code ? null : p.code)}>
                 {p.image_path ? <img className="a-thumb" src={imageUrl(p.image_path)} alt="" loading="lazy" /> : <div className="a-thumb" />}
                 <div className="a-row-main">
@@ -85,12 +86,16 @@ export default function Posts() {
                   </div>
                 </div>
                 {p.manual && <span className="a-pill info">수정함</span>}
-                {p.hidden && <span className="a-pill mute">숨김</span>}
+                {p.needs_review && <span className="a-pill warn">검토 대기</span>}
               </button>
               {openCode === p.code && (
                 <PostEditor
                   post={p}
                   onSaved={(updated) => setRows(rows.map((x) => (x.code === updated.code ? updated : x)))}
+                  onDeleted={() => {
+                    setOpenCode(null)
+                    setRows(rows.filter((x) => x.code !== p.code))
+                  }}
                 />
               )}
             </div>
@@ -106,14 +111,23 @@ export default function Posts() {
   )
 }
 
-function PostEditor({ post, onSaved }) {
+function PostEditor({ post, onSaved, onDeleted }) {
   const [category, setCategory] = useState(post.category)
   const [types, setTypes] = useState(post.goods_type)
   const [works, setWorks] = useState(fromList(post.works))
   const [start, setStart] = useState(toKstDate(post.starts_at))
   const [end, setEnd] = useState(toKstDate(post.ends_at))
-  const [hidden, setHidden] = useState(post.hidden)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const remove = async () => {
+    setDeleting(true)
+    const error = await deletePost(post)
+    setDeleting(false)
+    if (error === 'cancel') return
+    if (error) return alert(`삭제하지 못했습니다: ${error}`)
+    onDeleted()
+  }
 
   const save = async (patch) => {
     setSaving(true)
@@ -130,8 +144,10 @@ function PostEditor({ post, onSaved }) {
       works: toList(works),
       starts_at: fromKstDate(start),
       ends_at: fromKstDate(end),
-      hidden,
       manual: true,
+      // 관리자가 보고 저장했으니 검토 끝 → 사이트에 게시
+      needs_review: false,
+      hidden: false,
     })
 
   return (
@@ -176,11 +192,10 @@ function PostEditor({ post, onSaved }) {
         <span>작품 (쉼표로 구분)</span>
         <input className="a-input" value={works} onChange={(e) => setWorks(e.target.value)} placeholder="예: 명탐정 코난, 치이카와" />
       </label>
-      <label className="a-check">
-        <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
-        이 글 숨기기 (사이트에서 안 보임)
-      </label>
       <div className="a-actions">
+        <button className="a-btn a-danger" disabled={saving || deleting} onClick={remove}>
+          {deleting ? '삭제 중…' : '삭제'}
+        </button>
         {post.manual && (
           <button className="a-btn" disabled={saving} onClick={() => save({ manual: false })} title="다음 수집 때 자동 분류로 다시 채워집니다">
             자동 분류로 되돌리기
@@ -190,8 +205,8 @@ function PostEditor({ post, onSaved }) {
         <a className="a-btn" href={post.url} target="_blank" rel="noopener noreferrer">
           인스타 ↗
         </a>
-        <button className="a-btn a-primary" disabled={saving} onClick={saveManual}>
-          {saving ? '저장 중…' : '저장'}
+        <button className="a-btn a-primary" disabled={saving || deleting} onClick={saveManual}>
+          {saving ? '저장 중…' : post.needs_review ? '저장하고 게시' : '저장'}
         </button>
       </div>
     </div>

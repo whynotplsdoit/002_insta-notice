@@ -14,6 +14,7 @@ import { openBrowser, fetchAccount, fetchFollowingFeed, LoginRequiredError } fro
 import { loadConfig, savePosts, markCrawled } from './store.mjs'
 import { addShop } from './add-shop.mjs'
 import { log } from './log.mjs'
+import { cleanupRecords, deleteExpiredPosts, hasNoCaption, loadDeletedCodes, summarize } from './cleanup.mjs'
 
 const ACTIVE_HOURS = [9, 24] // 한국 시각
 const SAFETY_HOURS = 24 // 이 시간 넘게 직접 확인하지 않은 매장은 피드와 별개로 확인
@@ -39,9 +40,20 @@ const config = await loadConfig()
 const active = config.accounts.filter((a) => !a.hidden) // 숨긴 매장은 수집하지 않음
 const byUsername = new Map(active.map((a) => [a.username, a]))
 
+// 오래된 글 삭제 (DB만 정리, 인스타 접속 없음. 규칙은 cleanup.mjs)
+try {
+  const removed = await deleteExpiredPosts()
+  if (removed.length) await log(`🗑 오래된 글 ${removed.length}개 삭제 (${summarize(removed)})`)
+  const rec = await cleanupRecords()
+  if (rec.logs || rec.records) console.log(`기록 정리: 수집 기록 ${rec.logs}줄, 삭제 기록 ${rec.records}개`)
+} catch (err) {
+  await log(`✗ 오래된 글 삭제 실패: ${err.message}`, { level: 'error' })
+}
+
+// 이미 아는 글 = DB에 있는 글 + 지운 글 (지운 글이 피드에 보여도 "새 글"로 보지 않음)
 const { data: recent, error } = await db.from('posts').select('code').order('posted_at', { ascending: false }).limit(500)
 if (error) throw new Error(error.message)
-const known = new Set(recent.map((r) => r.code))
+const known = new Set([...recent.map((r) => r.code), ...(await loadDeletedCodes())])
 
 const { data: approved } = await db.from('shop_requests').select('*').eq('status', 'approved').order('created_at')
 
@@ -70,7 +82,8 @@ try {
 
   // 2) 팔로잉 피드
   const feed = await fetchFollowingFeed(context, known)
-  const fresh = feed.filter((p) => byUsername.has(p.owner) && !known.has(p.code))
+  // 본문 없는 글은 새 글로 치지 않음 (수집하지 않으므로 매장 페이지를 열 필요 없음)
+  const fresh = feed.filter((p) => byUsername.has(p.owner) && !known.has(p.code) && !hasNoCaption(p))
   const targets = [...new Set(fresh.map((p) => p.owner))]
   await log(
     `피드 확인: 글 ${feed.length}개 중 새 글 ${fresh.length}개` +

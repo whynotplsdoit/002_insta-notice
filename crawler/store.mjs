@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises'
 import { db } from './db.mjs'
 import { classifyPosts } from './classify.mjs'
+import { hasNoCaption, loadDeletedCodes, recordDeleted } from './cleanup.mjs'
 
 const BUCKET = 'post-images'
 
@@ -97,7 +98,13 @@ const codeOf = (post) => post.code ?? post.url.match(/\/(?:p|reel)\/([^/]+)/)?.[
 // 관리자가 분류를 직접 고친 글(manual)은 분류 칸을 덮어쓰지 않습니다.
 export async function savePosts(account, posts, works) {
   const withCode = posts.map((p) => ({ ...p, code: codeOf(p) })).filter((p) => p.code)
-  const classified = classifyPosts(account, withCode, works)
+  // 본문이 없는 글은 수집하지 않고, 다시 확인하지 않도록 기록만 해 둠
+  const deleted = await loadDeletedCodes()
+  const empty = withCode.filter((p) => hasNoCaption(p) && !deleted.has(p.code))
+  await recordDeleted(empty.map((p) => ({ code: p.code, account_username: account.username })))
+  for (const p of empty) deleted.add(p.code)
+  // 분류(반복 문구 찾기)는 최근 글 전체로 하고, 저장은 지운 글·본문 없는 글을 빼고 함
+  const classified = classifyPosts(account, withCode, works).filter((p) => !deleted.has(p.code))
 
   const { data: existing, error } = await db
     .from('posts')
@@ -107,8 +114,9 @@ export async function savePosts(account, posts, works) {
   const known = new Map(existing.map((e) => [e.code, e]))
 
   let imagesUploaded = 0
-  const autoRows = []
-  const manualRows = []
+  const newRows = [] // 처음 들어오는 글
+  const autoRows = [] // 이미 있는 글 (자동 분류로 갱신)
+  const manualRows = [] // 관리자가 고친 글 (분류는 그대로)
   for (const p of classified) {
     let imagePath = known.get(p.code)?.image_path ?? null
     if (!imagePath) {
@@ -127,21 +135,27 @@ export async function savePosts(account, posts, works) {
       updated_at: new Date().toISOString(),
       // first_seen_at, hidden 은 처음 넣을 때만 DB가 기본값으로 채움
     }
-    if (known.get(p.code)?.manual) {
+    const auto = {
+      ...base,
+      category: p.category,
+      goods_type: p.goodsType,
+      works: p.works,
+      branches: p.branches,
+      starts_at: p.startsAt,
+      ends_at: p.endsAt,
+    }
+    if (!known.has(p.code)) {
+      // '기타'로 분류된 새 글은 숨겨 두고 관리자 검토를 기다림
+      const review = p.category === '기타'
+      newRows.push({ ...auto, hidden: review, needs_review: review })
+    } else if (known.get(p.code).manual) {
       manualRows.push(base)
     } else {
-      autoRows.push({
-        ...base,
-        category: p.category,
-        goods_type: p.goodsType,
-        works: p.works,
-        branches: p.branches,
-        starts_at: p.startsAt,
-        ends_at: p.endsAt,
-      })
+      autoRows.push(auto)
     }
   }
 
+  if (newRows.length) check('게시물 저장', await db.from('posts').upsert(newRows))
   if (autoRows.length) check('게시물 저장', await db.from('posts').upsert(autoRows))
   if (manualRows.length) check('게시물 저장', await db.from('posts').upsert(manualRows))
   return { total: classified.length, added: classified.filter((p) => !known.has(p.code)).length, imagesUploaded }

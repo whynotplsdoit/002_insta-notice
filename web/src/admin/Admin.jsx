@@ -6,10 +6,12 @@ import Requests from './Requests.jsx'
 import Shops from './Shops.jsx'
 import Status from './Status.jsx'
 import Posts from './Posts.jsx'
+import Review from './Review.jsx'
 import './admin.css'
 
 const TABS = [
   { id: 'requests', label: '매장 신청' },
+  { id: 'review', label: '기타 검토' },
   { id: 'shops', label: '매장 관리' },
   { id: 'status', label: '수집 상태' },
   { id: 'posts', label: '글 분류' },
@@ -137,22 +139,21 @@ function Login() {
 
 function Dashboard({ email }) {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') ?? 'requests')
-  const [pendingCount, setPendingCount] = useState(0)
+  const [badges, setBadges] = useState({ requests: 0, review: 0 })
 
   const go = (id) => {
     setTab(id)
     window.history.replaceState(null, '', `/admin?tab=${id}`)
   }
 
-  const count = useCallback(
-    () =>
-      supabase
-        .from('shop_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .then(({ count: n }) => setPendingCount(n ?? 0)),
-    [],
-  )
+  // 탭 옆 숫자: 대기 중인 매장 신청, 검토할 기타 글
+  const count = useCallback(async () => {
+    const [r, v] = await Promise.all([
+      supabase.from('shop_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('posts').select('code', { count: 'exact', head: true }).eq('needs_review', true),
+    ])
+    setBadges({ requests: r.count ?? 0, review: v.count ?? 0 })
+  }, [])
   useEffect(() => {
     count()
     const t = setInterval(count, 60_000)
@@ -172,11 +173,12 @@ function Dashboard({ email }) {
         {TABS.map((t) => (
           <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => go(t.id)}>
             {t.label}
-            {t.id === 'requests' && pendingCount > 0 && <span className="a-badge">{pendingCount}</span>}
+            {badges[t.id] > 0 && <span className="a-badge">{badges[t.id]}</span>}
           </button>
         ))}
       </nav>
       {tab === 'requests' && <Requests onChange={count} />}
+      {tab === 'review' && <Review onChange={count} />}
       {tab === 'shops' && <Shops />}
       {tab === 'status' && <Status />}
       {tab === 'posts' && <Posts />}
