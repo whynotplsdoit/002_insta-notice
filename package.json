@@ -1,0 +1,23 @@
+{
+  "name": "insta-notice",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "login": "node crawler/login.mjs",
+    "fetch": "node crawler/fetch.mjs",
+    "test:classify": "node crawler/test-classify.mjs",
+    "check:db": "node --env-file=.env crawler/check-db.mjs",
+    "seed": "node --env-file=.env crawler/seed.mjs",
+    "crawl": "node --env-file=.env crawler/run.mjs",
+    "watch": "node --env-file=.env crawler/watch.mjs",
+    "shops": "node --env-file=.env crawler/shops.mjs",
+    "setup:admin": "node --env-file=.env crawler/setup-admin.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.2"
+  }
+}

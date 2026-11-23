@@ -1,0 +1,493 @@
+/* 관리자 화면: 일하기 편하도록 밝은 바탕 + 네이비 머리글 */
+.admin {
+  --a-bg: #f3f3f8;
+  --a-surface: #ffffff;
+  --a-text: #1a1a33;
+  --a-muted: #6b6c80;
+  --a-line: #e3e3ec;
+  --a-pink: var(--brand-pink);
+  min-height: 100vh;
+  background: var(--a-bg);
+  color: var(--a-text);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  .admin {
+    --a-bg: #17172e;
+    --a-surface: #222244;
+    --a-text: #ececf6;
+    --a-muted: #a2a3bf;
+    --a-line: #34345a;
+    color-scheme: dark;
+  }
+}
+
+.a-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--brand-navy);
+  color: #fff;
+}
+.a-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  text-decoration: none;
+}
+.a-logo img {
+  border-radius: 7px;
+}
+.a-logo span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--a-pink);
+  font-size: 12px;
+}
+.a-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.a-header .a-muted {
+  color: #a9aac8;
+  font-size: 13px;
+}
+
+.a-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 16px 60px;
+}
+
+.a-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--a-line);
+  scrollbar-width: none;
+}
+.a-tabs button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--a-muted);
+  font-weight: 700;
+}
+.a-tabs button.on {
+  color: var(--a-text);
+  border-bottom-color: var(--a-pink);
+}
+.a-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--a-pink);
+  color: #fff;
+  font-size: 12px;
+}
+
+.a-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.a-h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.a-h2-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.a-h2-row .a-h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.a-card {
+  background: var(--a-surface);
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+}
+.a-list {
+  overflow: hidden;
+}
+.a-list > * + * {
+  border-top: 1px solid var(--a-line);
+}
+
+.a-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.a-row-btn {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.a-row-btn:hover {
+  background: rgba(235, 84, 153, 0.05);
+}
+.a-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.a-row a {
+  color: var(--a-text);
+  font-weight: 700;
+}
+.a-chevron {
+  color: var(--a-muted);
+  font-size: 11px;
+}
+.is-hidden {
+  opacity: 0.6;
+}
+
+.a-strong {
+  font-weight: 800;
+  color: var(--a-text);
+}
+.a-muted {
+  color: var(--a-muted);
+}
+.a-small-text {
+  font-size: 12px;
+}
+.a-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--a-muted);
+}
+.a-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.a-pill {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #eeeef4;
+  color: #555770;
+}
+.a-pill.warn {
+  background: #fef3c7;
+  color: #a16207;
+}
+.a-pill.info {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.a-pill.ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+.a-pill.err {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.a-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--a-line);
+  border-radius: 10px;
+  background: var(--a-surface);
+  color: var(--a-text);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.a-btn:disabled {
+  opacity: 0.5;
+}
+.a-btn.a-small {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.a-btn.a-primary {
+  border-color: var(--a-pink);
+  background: var(--a-pink);
+  color: #fff;
+}
+.a-btn.a-danger {
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+.a-header .a-btn {
+  border-color: #3a3a62;
+  background: transparent;
+  color: #fff;
+}
+
+.a-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 10px;
+  background: var(--a-surface);
+  color: var(--a-text);
+  font-size: 15px;
+  outline: none;
+}
+.a-input:focus {
+  border-color: var(--a-pink);
+}
+.a-input-sm {
+  width: auto;
+  height: 30px;
+  font-size: 13px;
+}
+.a-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--a-muted);
+}
+.a-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.a-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--a-pink);
+}
+.a-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.a-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.a-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.a-spacer {
+  flex: 1;
+}
+
+/* 로그인 */
+.a-login {
+  max-width: 400px;
+  margin: 40px auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.a-login h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.a-login p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* 매장 신청 */
+.a-request {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.a-request-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.a-request-head a {
+  text-decoration: none;
+  font-size: 16px;
+}
+.a-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--a-bg);
+  font-size: 14px;
+}
+
+/* 편집 영역 */
+.a-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 14px 16px;
+  background: var(--a-surface);
+  box-shadow: inset 0 0 0 9999px rgba(235, 84, 153, 0.03);
+}
+.a-branch {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1.6fr auto;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.a-add {
+  align-self: flex-start;
+}
+.a-caption {
+  max-height: 160px;
+  margin: 0;
+  padding: 10px;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: var(--a-bg);
+  font-size: 13px;
+  white-space: pre-line;
+  color: var(--a-text);
+}
+
+/* 글 목록 */
+.a-filters {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 8px;
+}
+.a-post-row {
+  align-items: center;
+}
+.a-thumb {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--a-line);
+}
+.a-post-title {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 수집 상태 */
+.a-alert {
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.a-alert.err {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.a-alert.warn {
+  background: #fef3c7;
+  color: #854d0e;
+}
+.a-alert code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.08);
+}
+.a-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.a-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+}
+.a-stat b {
+  font-size: 22px;
+}
+.a-stat.warn b {
+  color: #d97706;
+}
+.a-logs {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.a-log {
+  display: flex;
+  gap: 10px;
+  padding: 7px 14px;
+  font-size: 13px;
+}
+.a-log-time {
+  flex: none;
+  width: 92px;
+  color: var(--a-muted);
+}
+.a-log.warn {
+  background: #fffbeb;
+}
+.a-log.error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+@media (prefers-color-scheme: dark) {
+  .a-log.warn {
+    background: #3a2f12;
+  }
+  .a-log.error {
+    background: #3b1d24;
+    color: #fca5a5;
+  }
+}
+
+@media (max-width: 640px) {
+  .a-hide-sm {
+    display: none;
+  }
+  .a-grid3,
+  .a-stats,
+  .a-filters {
+    grid-template-columns: 1fr;
+  }
+  .a-branch {
+    grid-template-columns: 1fr 1fr;
+  }
+}

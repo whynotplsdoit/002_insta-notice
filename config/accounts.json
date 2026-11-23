@@ -1,0 +1,90 @@
+[
+  {
+    "username": "shirostore_hongdae",
+    "displayName": "시로상점",
+    "accountType": "굿즈샵",
+    "fixedHashtags": ["시로입고", "시로상점", "시로가챠", "홍대굿즈샵"],
+    "crawlIntervalHours": 2,
+    "branches": [{ "name": "홍대점", "aliases": [], "region": "홍대", "address": null }]
+  },
+  {
+    "username": "umeshop__o",
+    "displayName": "유미상점",
+    "accountType": "굿즈샵",
+    "fixedHashtags": ["유미상점", "유미상점입고", "유미상점쿠지", "홍대굿즈샵", "홍대굿즈", "애니굿즈", "굿즈샵투어"],
+    "crawlIntervalHours": 6,
+    "branches": [
+      { "name": "홍대점", "aliases": [], "region": "홍대", "address": "서울 마포구 와우산로29길 26-10 3층" }
+    ]
+  },
+  {
+    "username": "onefigure_hongdae",
+    "displayName": "원피규어",
+    "accountType": "굿즈샵",
+    "fixedHashtags": ["원피규어", "홍대피규어샵", "홍대피규어", "굿즈샵", "홍대굿즈샵", "가챠맛집"],
+    "crawlIntervalHours": 4,
+    "branches": [{ "name": "홍대점", "aliases": [], "region": "홍대", "address": null }]
+  },
+  {
+    "username": "o_takuplanet",
+    "displayName": "오타쿠플래닛",
+    "accountType": "굿즈샵",
+    "fixedHashtags": ["오타쿠플래닛", "홍대굿즈샵", "홍대애니굿즈샵", "홍대피규어샵"],
+    "crawlIntervalHours": 12,
+    "branches": [
+      { "name": "홍대점", "aliases": [], "region": "홍대", "address": "서울 마포구 서교동 333-27 1층" }
+    ]
+  },
+  {
+    "username": "kuji.run",
+    "displayName": "토이아일랜드",
+    "accountType": "굿즈샵",
+    "fixedHashtags": [],
+    "crawlIntervalHours": 12,
+    "branches": [
+      { "name": "평택점", "aliases": [], "region": "평택", "address": "경기 평택시 팔각정길 8-1 1층" }
+    ]
+  },
+  {
+    "username": "space_urara",
+    "displayName": "스페이스우라라",
+    "accountType": "굿즈샵",
+    "fixedHashtags": ["스페이스우라라", "홍대굿즈샵", "홍대굿즈", "대구굿즈샵"],
+    "crawlIntervalHours": 6,
+    "branches": [
+      { "name": "홍대점", "aliases": ["[홍대점]"], "region": "홍대", "address": "서울 마포구 와우산로29길 48-29 지하1층" },
+      { "name": "대구 동성로 스파크점", "aliases": ["[대구동성로스파크점]", "스파크점"], "region": "대구", "address": "대구 중구 동성로6길 61 스파크 3층" }
+    ]
+  },
+  {
+    "username": "animatecafe_korea",
+    "displayName": "애니메이트 카페",
+    "accountType": "콜라보카페",
+    "fixedHashtags": ["애니메이트카페", "콜라보카페"],
+    "crawlIntervalHours": 12,
+    "branches": [
+      { "name": "홍대점", "aliases": ["애니메이트 카페 홍대점", "홍대점"], "region": "홍대", "address": null },
+      { "name": "부산점", "aliases": ["애니메이트 카페 부산점", "부산점"], "region": "부산", "address": null },
+      { "name": "잠실롯데점", "aliases": ["애니메이트 카페 잠실롯데점", "잠실롯데점"], "region": "잠실", "address": null }
+    ]
+  },
+  {
+    "username": "thecocogoods",
+    "displayName": "THE꼬꼬굿즈",
+    "accountType": "굿즈샵",
+    "fixedHashtags": ["홍대굿즈샵", "굿즈샵", "먼작귀", "우사기", "치이카와"],
+    "crawlIntervalHours": 4,
+    "branches": [
+      { "name": "1호점", "aliases": ["1 & 2호점", "1&2호점", "1호점"], "region": "홍대", "address": null },
+      { "name": "2호점", "aliases": ["1 & 2호점", "1&2호점", "2호점"], "region": "홍대", "address": null }
+    ]
+  },
+  {
+    "username": "jsstore_hongdae",
+    "displayName": "제이에스 스토어",
+    "accountType": "굿즈샵",
+    "fixedHashtags": [],
+    "crawlIntervalHours": 4,
+    "branches": [{ "name": "홍대점", "aliases": [], "region": "홍대", "address": null }]
+  }
+]

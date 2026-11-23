@@ -1,0 +1,89 @@
+:root {
+  /* 브랜드 대표색 (로고에서 추출, README "브랜드" 참고) */
+  --brand-navy: #20203e;
+  --brand-pink: #eb5499;
+
+  --bg: var(--brand-navy); /* 머리글과 같은 네이비로 통일 */
+  --surface: #ffffff;
+  --text: #1a1a33;
+  --muted: #6b6c80;
+  --line: #e3e3ec;
+  --accent: var(--brand-pink);
+  --accent-soft: #fde8f2;
+  --chip: #eeeef4;
+  /* 머리글: 로고와 같은 네이비 */
+  --header-bg: var(--brand-navy);
+  --header-text: #ffffff;
+  --header-muted: #a9aac8;
+  --header-line: #33335a;
+  --header-input: #2c2c50;
+  /* 아래 탭: 선택 안 된 것은 네이비, 선택된 것은 핑크 */
+  --tab-idle: var(--brand-navy);
+  --cat-입고: #2f7cf6;
+  --cat-콜라보팝업: #a855f7;
+  --cat-이벤트안내: #f59e0b;
+  --cat-기타: #8a8f98;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.05);
+  --header-h: 0px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #20203e;
+    --surface: #2a2a4c;
+    --text: #ececf6;
+    --muted: #9c9db8;
+    --line: #313154;
+    --accent: #f26aa8;
+    --accent-soft: #42213f;
+    --chip: #2c2c4e;
+    --header-bg: #20203e;
+    --header-line: #313154;
+    --header-input: #2a2a4a;
+    --tab-idle: #a9aac8; /* 어두운 배경에서는 네이비가 안 보여서 밝은 남색 */
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR',
+    system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+}

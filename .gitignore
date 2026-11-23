@@ -1,0 +1,14 @@
+# 로그인 정보는 %LOCALAPPDATA%\insta-notice\profile 에 저장됨 (이 폴더 밖)
+# 혹시 모를 경우를 대비해 비슷한 이름도 제외
+.auth-profile/
+profile/
+
+# 설치된 패키지, 수집한 데이터, 빌드 결과
+node_modules/
+data/
+dist/
+data-debug.png
+
+# 비밀 키 (절대 GitHub에 올리지 않음)
+.env
+.env.local
