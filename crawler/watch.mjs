@@ -27,20 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const pause = () => sleep(20_000 + Math.random() * 40_000) // 페이지 사이 20~60초
 const koreaHour = () => Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false }))
 
-if (!now) {
-  const hour = koreaHour()
-  if (hour < ACTIVE_HOURS[0] || hour >= ACTIVE_HOURS[1]) {
-    console.log(`지금은 ${hour}시라 확인하지 않습니다. (${ACTIVE_HOURS[0]}~${ACTIVE_HOURS[1]}시에만)`)
-    process.exit(0)
-  }
-  await sleep(Math.random() * START_JITTER_MS)
-}
-
-const config = await loadConfig()
-const active = config.accounts.filter((a) => !a.hidden) // 숨긴 매장은 수집하지 않음
-const byUsername = new Map(active.map((a) => [a.username, a]))
-
-// 오래된 글 삭제 (DB만 정리, 인스타 접속 없음. 규칙은 cleanup.mjs)
+// 0) 오래된 글 삭제: DB만 정리하고 인스타에 접속하지 않으므로 시간과 상관없이 매번 (규칙은 cleanup.mjs)
 try {
   const removed = await deleteExpiredPosts()
   if (removed.length) await log(`🗑 오래된 글 ${removed.length}개 삭제 (${summarize(removed)})`)
@@ -49,6 +36,20 @@ try {
 } catch (err) {
   await log(`✗ 오래된 글 삭제 실패: ${err.message}`, { level: 'error' })
 }
+
+// 인스타 접속은 정해진 시간에만
+if (!now) {
+  const hour = koreaHour()
+  if (hour < ACTIVE_HOURS[0] || hour >= ACTIVE_HOURS[1]) {
+    console.log(`지금은 ${hour}시라 인스타 확인은 쉽니다. (${ACTIVE_HOURS[0]}~${ACTIVE_HOURS[1]}시에만)`)
+    process.exit(0)
+  }
+  await sleep(Math.random() * START_JITTER_MS)
+}
+
+const config = await loadConfig()
+const active = config.accounts.filter((a) => !a.hidden) // 숨긴 매장은 수집하지 않음
+const byUsername = new Map(active.map((a) => [a.username, a]))
 
 // 이미 아는 글 = DB에 있는 글 + 지운 글 (지운 글이 피드에 보여도 "새 글"로 보지 않음)
 const { data: recent, error } = await db.from('posts').select('code').order('posted_at', { ascending: false }).limit(500)

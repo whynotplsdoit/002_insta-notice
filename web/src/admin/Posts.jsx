@@ -1,5 +1,5 @@
 // 글 분류 고치기: 분류·상품 종류·작품·일정 직접 수정, 글 완전 삭제
-// 직접 고친 글은 "수정함" 표시가 붙고 크롤러가 자동 분류로 덮어쓰지 않습니다.
+// 관리자가 저장한 글은 "분류 완료" 표시가 붙고 크롤러가 자동 분류로 덮어쓰지 않습니다.
 import { useCallback, useEffect, useState } from 'react'
 import { imageUrl, supabase } from '../supabase.js'
 import { titleOf } from '../format.js'
@@ -64,7 +64,7 @@ export default function Posts() {
         </select>
         <select className="a-input" value={only} onChange={(e) => setOnly(e.target.value)}>
           <option value="">전체 글</option>
-          <option value="manual">직접 고친 글</option>
+          <option value="manual">분류 완료 글</option>
           <option value="review">검토 대기 글</option>
         </select>
       </div>
@@ -85,7 +85,7 @@ export default function Posts() {
                     {p.works.length > 0 && ` · ${p.works.slice(0, 2).join(', ')}${p.works.length > 2 ? ' 외' : ''}`}
                   </div>
                 </div>
-                {p.manual && <span className="a-pill info">수정함</span>}
+                {p.manual && <span className="a-pill info">분류 완료</span>}
                 {p.needs_review && <span className="a-pill warn">검토 대기</span>}
               </button>
               {openCode === p.code && (
