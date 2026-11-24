@@ -152,6 +152,9 @@
   width: min(480px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain; /* 창 안 스크롤이 끝까지 가도 뒤 화면으로 넘어가지 않게 */
+}
+.modal {
   overscroll-behavior: contain;
 }
 .shop-sheet {

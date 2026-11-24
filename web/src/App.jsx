@@ -565,7 +565,8 @@ function Feed() {
             setShops([shopInfo.username])
             setTab('전체')
             setShopInfo(null)
-            window.scrollTo({ top: 0, behavior: 'smooth' })
+            // 창이 닫히며 스크롤 잠금이 풀린 뒤에 맨 위로
+            setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
           }}
         />
       )}
