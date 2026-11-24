@@ -476,6 +476,13 @@
   align-items: center;
   gap: 8px;
 }
+/* 막대 시작·끝 위치를 줄마다 맞춤 */
+.a-bars-even li {
+  grid-template-columns: 90px minmax(0, 1fr) 96px;
+}
+.a-bars-even .a-num {
+  text-align: right;
+}
 .a-bar-label {
   overflow: hidden;
   white-space: nowrap;

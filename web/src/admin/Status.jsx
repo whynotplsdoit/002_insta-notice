@@ -1,7 +1,7 @@
-// 수집 상태: 로그인 풀림 경고, 매장별 마지막 수집, 최근 수집 기록
+// 수집 상태: 로그인 풀림 경고, 매장별 마지막 수집, 분류별 글 개수, 최근 수집 기록
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
-import { ago, fmtTime } from './util.js'
+import { CATEGORIES, ago, fmtTime } from './util.js'
 
 const STALE_HOURS = 26 // 정기 확인이 24시간마다라 이보다 오래되면 문제
 
@@ -9,20 +9,43 @@ export default function Status() {
   const [logs, setLogs] = useState(null)
   const [shops, setShops] = useState([])
   const [level, setLevel] = useState('all')
+  const [counts, setCounts] = useState(null) // 글 개수 { total, 입고, ..., review }
 
   const load = useCallback(async () => {
-    const [l, a] = await Promise.all([
+    const head = (q) => q.then(({ count }) => count ?? 0)
+    const posts = () => supabase.from('posts').select('code', { count: 'exact', head: true })
+    const [l, a, total, review, ...byCat] = await Promise.all([
       supabase.from('crawl_logs').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('accounts').select('username, display_name, last_crawled_at, hidden').order('last_crawled_at'),
+      head(posts()),
+      head(posts().eq('needs_review', true)),
+      ...CATEGORIES.map((c) => head(posts().eq('category', c))),
     ])
     setLogs(l.data ?? [])
     setShops((a.data ?? []).filter((s) => !s.hidden))
+    setCounts({ total, review, byCat: CATEGORIES.map((c, i) => [c, byCat[i]]) })
   }, [])
 
+  // 처음 한 번 불러오고, 그 뒤로는 크롤러가 기록을 남길 때만 다시 불러옴 (실시간 알림)
+  // 한 번 수집할 때 기록이 여러 줄 생기므로 마지막 기록 뒤 3초 기다렸다가 한 번만
+  const [, tick] = useState(0)
   useEffect(() => {
     load()
-    const t = setInterval(load, 60_000)
-    return () => clearInterval(t)
+    let wait = null
+    const channel = supabase
+      .channel('crawl-logs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crawl_logs' }, () => {
+        clearTimeout(wait)
+        wait = setTimeout(load, 3000)
+      })
+      .subscribe()
+    // "13분 전" 같은 시간 표시만 1분마다 다시 그림 (DB는 읽지 않음)
+    const clock = setInterval(() => tick((n) => n + 1), 60_000)
+    return () => {
+      clearTimeout(wait)
+      clearInterval(clock)
+      supabase.removeChannel(channel)
+    }
   }, [load])
 
   if (!logs) return <p className="a-empty">불러오는 중…</p>
@@ -58,6 +81,30 @@ export default function Status() {
           {stale.length > 0 && <span className="a-small-text">{stale.map((s) => s.display_name).join(', ')}</span>}
         </div>
       </div>
+      {counts && (
+        <div className="a-card a-pad">
+          <div className="a-h2-row">
+            <h3 className="a-h3" style={{ margin: 0 }}>
+              수집된 글 <span className="a-num">{counts.total}개</span>
+            </h3>
+            {counts.review > 0 && <span className="a-pill warn">검토 대기 {counts.review}</span>}
+          </div>
+          <ul className="a-bars a-bars-even">
+            {counts.byCat.map(([c, n]) => (
+              <li key={c}>
+                <span className="a-bar-label">{c}</span>
+                <span className="a-bar-track" aria-hidden="true">
+                  <span className="a-bar-fill" style={{ width: `${counts.total ? (n / counts.total) * 100 : 0}%` }} />
+                </span>
+                <span className="a-num">
+                  {n}개 <span className="a-muted">({counts.total ? Math.round((n / counts.total) * 100) : 0}%)</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {lastRun && Date.now() - new Date(lastRun.created_at).getTime() > 60 * 60_000 && (
         <div className="a-alert warn">
           1시간 넘게 자동 확인 기록이 없습니다. 밤 시간(0~9시)이 아니라면 PC가 꺼져 있거나 작업 스케줄러가 멈췄을 수 있습니다.
