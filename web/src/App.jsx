@@ -5,6 +5,7 @@ import { usePosts } from './usePosts.js'
 import PostCard from './PostCard.jsx'
 import RequestShop from './RequestShop.jsx'
 import ShopInfo from './ShopInfo.jsx'
+import PostDetail from './PostDetail.jsx'
 import InstallPrompt from './InstallPrompt.jsx'
 import { track } from './track.js'
 import { BoxIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
@@ -61,6 +62,7 @@ function Feed() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [requestOpen, setRequestOpen] = useState(false)
   const [shopInfo, setShopInfo] = useState(null) // { username, branches: 글에 적힌 지점 }
+  const [detail, setDetail] = useState(null) // 상세 창에 연 글
   const [sortMode, setSortMode] = useState(saved.sortMode === 'posted' ? 'posted' : 'schedule')
   const [now, setNow] = useState(Date.now())
 
@@ -469,6 +471,10 @@ function Feed() {
                     shopName={shopOf.get(p.account_username)?.display_name ?? p.account_username}
                     showBranch={(branchCount.get(p.account_username) ?? 0) > 1}
                     isNew={now - new Date(p.first_seen_at).getTime() < NEW_MS && now - new Date(p.posted_at).getTime() < NEW_MS}
+                    onOpen={() => {
+                      setDetail(p)
+                      track('more', p.code, { shop: p.account_username })
+                    }}
                     onShopClick={() => {
                       setShopInfo({ username: p.account_username, branches: p.branches })
                       track('shop_open', p.account_username, { from: 'card' })
@@ -552,6 +558,21 @@ function Feed() {
       <InstallPrompt />
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
+      {detail && (
+        <PostDetail
+          post={posts.find((x) => x.code === detail.code) ?? detail}
+          shop={shopOf.get(detail.account_username)}
+          showBranch={(branchCount.get(detail.account_username) ?? 0) > 1}
+          now={now}
+          onClose={() => setDetail(null)}
+          onShopOpen={() => {
+            // 상세 창 위에 매장 정보 창을 겹쳐 엶 (닫으면 상세 창으로 돌아옴)
+            setShopInfo({ username: detail.account_username, branches: detail.branches })
+            track('shop_open', detail.account_username, { from: 'detail' })
+          }}
+        />
+      )}
+
       {shopInfo && shopOf.get(shopInfo.username) && (
         <ShopInfo
           account={shopOf.get(shopInfo.username)}
@@ -565,6 +586,7 @@ function Feed() {
             setShops([shopInfo.username])
             setTab('전체')
             setShopInfo(null)
+            setDetail(null)
             // 창이 닫히며 스크롤 잠금이 풀린 뒤에 맨 위로
             setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
           }}

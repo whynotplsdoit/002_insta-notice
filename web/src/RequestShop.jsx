@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import { track } from './track.js'
 import { useScrollLock } from './useScrollLock.js'
+import { useBackToClose } from './useBackToClose.js'
 
 // "https://www.instagram.com/shop_name/?hl=ko", "@shop_name", "shop_name" → "shop_name"
 export function parseUsername(input) {
@@ -23,6 +24,7 @@ export default function RequestShop({ accounts, onClose }) {
   const dialogRef = useRef(null)
 
   useScrollLock() // 창이 열려 있는 동안 뒤 목록은 스크롤되지 않게
+  useBackToClose(onClose) // 휴대폰 뒤로 가기로 닫기
 
   // 창 열기 (Esc 키나 바깥을 누르면 닫힘)
   useEffect(() => {

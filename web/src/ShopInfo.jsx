@@ -6,6 +6,7 @@ import { imageUrl } from './supabase.js'
 import { hoursLines, openStatus, todayName } from './hours.js'
 import { track } from './track.js'
 import { useScrollLock } from './useScrollLock.js'
+import { useBackToClose } from './useBackToClose.js'
 
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
 
@@ -18,6 +19,7 @@ function mapUrl(branch, shopName) {
 export default function ShopInfo({ account, branches, posts, focusBranches = [], now, onShowOnly, onClose }) {
   const dialogRef = useRef(null)
   useScrollLock() // 창이 열려 있는 동안 뒤 목록은 스크롤되지 않게
+  useBackToClose(onClose) // 휴대폰 뒤로 가기로 닫기
   useEffect(() => {
     dialogRef.current?.showModal?.()
   }, [])

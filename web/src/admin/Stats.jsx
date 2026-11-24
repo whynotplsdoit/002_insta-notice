@@ -32,7 +32,7 @@ const FEATURE_LABELS = {
   sort: '정렬 바꾸기',
   filter: '필터 사용',
   search: '검색',
-  more: '본문 더보기',
+  more: '글 상세 보기',
   new_posts: '새 소식 버튼',
   shop_open: '매장 정보 창 열기',
   shop_only: '이 매장 소식만 보기',
