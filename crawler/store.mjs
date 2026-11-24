@@ -145,9 +145,9 @@ export async function savePosts(account, posts, works) {
       ends_at: p.endsAt,
     }
     if (!known.has(p.code)) {
-      // '기타'로 분류된 새 글은 숨겨 두고 관리자 검토를 기다림
+      // '기타'로 분류된 새 글은 사이트("전체" 탭)에 보이면서 관리자 검토 대기
       const review = p.category === '기타'
-      newRows.push({ ...auto, hidden: review, needs_review: review })
+      newRows.push({ ...auto, hidden: false, needs_review: review })
     } else if (known.get(p.code).manual) {
       manualRows.push(base)
     } else {

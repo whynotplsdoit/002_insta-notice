@@ -13,6 +13,7 @@ import { db } from './db.mjs'
 import { openBrowser, fetchAccount, fetchFollowingFeed, LoginRequiredError } from './instagram.mjs'
 import { loadConfig, savePosts, saveProfile, markCrawled } from './store.mjs'
 import { syncNaver } from './naver-sync.mjs'
+import { notifyAdmin } from './notify.mjs'
 import { addShop } from './add-shop.mjs'
 import { log } from './log.mjs'
 import { cleanupRecords, deleteExpiredPosts, hasNoCaption, loadDeletedCodes, summarize } from './cleanup.mjs'
@@ -61,6 +62,7 @@ const { data: approved } = await db.from('shop_requests').select('*').eq('status
 
 const context = await openBrowser()
 let failed = 0
+const alerts = { loginRequired: false, errors: [], added: [] } // 카톡 알림용
 try {
   // 1) 승인된 매장 추가
   for (const req of approved ?? []) {
@@ -74,10 +76,12 @@ try {
       const msg = `${r.account.displayName} 추가 완료: 글 ${r.total}개, 사진 ${r.imagesUploaded}장${r.followed === 'failed' ? ' (⚠ 팔로우 실패: 부계정으로 직접 팔로우 필요)' : ''}`
       await db.from('shop_requests').update({ status: 'done', result: msg }).eq('id', req.id)
       await log(`🏪 ${msg}`, { account: req.username })
+      alerts.added.push(r.account.displayName)
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err
       await db.from('shop_requests').update({ status: 'failed', result: err.message }).eq('id', req.id)
       await log(`✗ 매장 추가 실패 @${req.username}: ${err.message}`, { level: 'error', account: req.username })
+      alerts.errors.push(`매장 추가 실패 @${req.username}`)
     }
     await pause()
   }
@@ -114,11 +118,14 @@ try {
       if (err instanceof LoginRequiredError) throw err
       failed++
       await log(`✗ ${account.displayName}: ${err.message}`, { level: 'error', account: username })
+      alerts.errors.push(`${account.displayName}: ${err.message}`)
     }
   }
 } catch (err) {
   failed++
   await log(`✗ ${err.message}`, { level: 'error' })
+  if (err instanceof LoginRequiredError) alerts.loginRequired = true
+  else alerts.errors.push(err.message)
 } finally {
   await context.close()
 }
@@ -130,4 +137,7 @@ try {
 } catch (err) {
   await log(`✗ 네이버 지점 정보 갱신 실패: ${err.message}`, { level: 'error' })
 }
+
+// 관리자에게 카톡 알림 (문제, 새 매장 신청, 검토할 글 등)
+await notifyAdmin(alerts, log)
 process.exitCode = failed ? 1 : 0

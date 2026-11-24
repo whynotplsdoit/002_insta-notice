@@ -145,7 +145,7 @@ function PostEditor({ post, onSaved, onDeleted }) {
       starts_at: fromKstDate(start),
       ends_at: fromKstDate(end),
       manual: true,
-      // 관리자가 보고 저장했으니 검토 끝 → 사이트에 게시
+      // 관리자가 보고 저장했으니 검토 끝
       needs_review: false,
       hidden: false,
     })
@@ -206,7 +206,7 @@ function PostEditor({ post, onSaved, onDeleted }) {
           인스타 ↗
         </a>
         <button className="a-btn a-primary" disabled={saving || deleting} onClick={saveManual}>
-          {saving ? '저장 중…' : post.needs_review ? '저장하고 게시' : '저장'}
+          {saving ? '저장 중…' : post.needs_review ? '저장 (검토 완료)' : '저장'}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
-// 기타 검토: '기타'로 분류된 글을 보고 [게시] 또는 [삭제]
-// - 게시: 사이트에 보이게 (분류를 바꿔서 게시할 수도 있음)
+// 기타 검토: '기타'로 분류된 글을 보고 [검토 완료] 또는 [삭제]
+// - 검토 대기 중에도 사이트 "전체" 탭에는 보임
+// - 검토 완료: 그대로 두거나 분류를 바꿔서 확정 (크롤러가 덮어쓰지 않음)
 // - 삭제: 글과 사진을 완전히 지우고, 다시 수집되지 않게 기록
 import { useCallback, useEffect, useState } from 'react'
 import { imageUrl, supabase } from '../supabase.js'
@@ -35,7 +36,7 @@ export default function Review({ onChange }) {
       <div>
         <h2 className="a-h2">검토할 글 {rows.length}개</h2>
         <p className="a-muted a-small-text">
-          자동 분류에서 '기타'로 나온 글입니다. 검토 전에는 사이트에 보이지 않습니다.
+          자동 분류에서 '기타'로 나온 글입니다. 검토 중에도 사이트 "전체" 탭에는 보입니다. 분류를 확정하거나 삭제하세요.
         </p>
       </div>
       {rows.length === 0 && <p className="a-empty">검토할 글이 없습니다.</p>}
@@ -63,7 +64,7 @@ function ReviewCard({ post, shopName, onDone }) {
       })
       .eq('code', post.code)
     setBusy(false)
-    if (error) return alert(`게시하지 못했습니다: ${error.message}`)
+    if (error) return alert(`저장하지 못했습니다: ${error.message}`)
     onDone(post.code)
   }
 
@@ -96,13 +97,13 @@ function ReviewCard({ post, shopName, onDone }) {
           <button className="a-btn a-danger" disabled={busy} onClick={remove}>
             삭제
           </button>
-          <select className="a-input a-input-sm" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="게시할 분류">
+          <select className="a-input a-input-sm" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="확정할 분류">
             {CATEGORIES.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
           <button className="a-btn a-primary" disabled={busy} onClick={publish}>
-            게시
+            검토 완료
           </button>
         </div>
       </div>
