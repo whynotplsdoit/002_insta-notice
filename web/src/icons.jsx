@@ -58,6 +58,14 @@ export const StoreIcon = () => (
   </svg>
 )
 
+// 지도: 지도 핀
+export const MapPinIcon = () => (
+  <svg {...base}>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.4" />
+  </svg>
+)
+
 // 이벤트·안내: 확성기
 export const MegaphoneIcon = () => (
   <svg {...base}>

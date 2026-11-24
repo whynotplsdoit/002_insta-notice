@@ -8,7 +8,8 @@ import ShopInfo from './ShopInfo.jsx'
 import PostDetail from './PostDetail.jsx'
 import InstallPrompt from './InstallPrompt.jsx'
 import { track } from './track.js'
-import { BoxIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
+import { BoxIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
+import MapView from './MapView.jsx'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
 const SORTS = [
@@ -21,6 +22,7 @@ const TABS = [
   { id: '입고', label: '입고', Icon: BoxIcon },
   { id: '콜라보·팝업', label: '콜라보·팝업', Icon: StoreIcon },
   { id: '이벤트·안내', label: '이벤트·안내', Icon: MegaphoneIcon },
+  { id: 'map', label: '지도', Icon: MapPinIcon }, // 글 목록 대신 매장 지도
 ]
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
 const STORAGE_KEY = 'goods-feed:filters:v2'
@@ -143,6 +145,17 @@ function Feed() {
     [visible, sortMode, now],
   )
 
+  // 지도 탭: 글 목록 대신 매장 지도 (지역·매장 필터는 지도에도 적용)
+  const isMap = tab === 'map'
+  const listReady = status === 'ready' && !isMap
+  const mapBranches = useMemo(
+    () =>
+      branches.filter(
+        (b) => (shops === null || shops.includes(b.account_username)) && (regions.length === 0 || regions.includes(b.region)),
+      ),
+    [branches, shops, regions],
+  )
+
   // 구역별 개수 (오늘·진행 중 / 앞으로 예정 / 지난 소식)
   const groupCount = useMemo(() => {
     const c = { today: 0, upcoming: 0, past: 0 }
@@ -151,8 +164,10 @@ function Feed() {
   }, [sorted])
 
   // 지난 소식은 처음에 접어 둠 (일정순일 때만)
+  // 단, 지난 소식밖에 없으면 빈 화면이 되지 않도록 펼쳐서 보여줌
   const [pastOpen, setPastOpen] = useState(false)
-  const pastHidden = sortMode === 'schedule' && !pastOpen && groupCount.past > 0
+  const onlyPast = groupCount.past > 0 && groupCount.past === sorted.length
+  const pastHidden = sortMode === 'schedule' && !pastOpen && !onlyPast && groupCount.past > 0
   const list = useMemo(() => (pastHidden ? sorted.filter((x) => x.group !== 'past') : sorted), [sorted, pastHidden])
 
   // 30개씩 보여주기: 조건이 바뀌면 처음 30개부터
@@ -382,7 +397,7 @@ function Feed() {
               onClick={() => selectTab(t.id)}
             >
               {t.label}
-              <span className="count">{counts[t.id] ?? 0}</span>
+              {t.id !== 'map' && <span className="count">{counts[t.id] ?? 0}</span>}
             </button>
           ))}
         </nav>
@@ -402,6 +417,18 @@ function Feed() {
 
         <main className="main">
           {status === 'loading' && <div className="state">불러오는 중…</div>}
+          {status === 'ready' && isMap && (
+            <MapView
+              branches={mapBranches}
+              shopOf={shopOf}
+              postCountOf={postCountOf}
+              now={now}
+              onShopOpen={(username, focus) => {
+                setShopInfo({ username, branches: focus })
+                track('shop_open', username, { from: 'map' })
+              }}
+            />
+          )}
           {status === 'error' && (
             <div className="state">
               <p>소식을 불러오지 못했습니다.</p>
@@ -410,7 +437,7 @@ function Feed() {
               </button>
             </div>
           )}
-          {status === 'ready' && visible.length === 0 && (
+          {listReady && visible.length === 0 && (
             <div className="state">
               <p>{shops?.length === 0 ? '매장을 하나 이상 선택하세요.' : '조건에 맞는 소식이 없습니다.'}</p>
               {(activeFilters > 0 || query) && (
@@ -420,7 +447,7 @@ function Feed() {
               )}
             </div>
           )}
-          {status === 'ready' && (
+          {listReady && (
             <div className="toolbar">
               {/* 필터로 일부만 보일 때는 "보이는 글 / 이 탭 전체 글" */}
               <span className="result-count">
@@ -450,7 +477,7 @@ function Feed() {
               </div>
             </div>
           )}
-          {status === 'ready' && visible.length > 0 && (
+          {listReady && visible.length > 0 && (
             <div className="grid">
               {page.map(({ post: p, group }, i) => (
                 <Fragment key={p.code}>
@@ -458,7 +485,7 @@ function Feed() {
                     <h2 className={`section-title section-${group}`}>
                       {GROUPS[group]}
                       <span className="count">{groupCount[group]}</span>
-                      {group === 'past' && (
+                      {group === 'past' && !onlyPast && (
                         <button type="button" className="section-toggle" onClick={() => setPastOpen(false)}>
                           접기
                         </button>
@@ -486,7 +513,7 @@ function Feed() {
           )}
 
           {/* 30개씩: 목록 끝에 닿으면 자동으로 다음 30개 (안 되면 버튼으로) */}
-          {status === 'ready' && shown < list.length && (
+          {listReady && shown < list.length && (
             <div ref={moreRef} className="load-more">
               <button type="button" className="btn" onClick={() => setShown((n) => n + PAGE_SIZE)}>
                 더 보기 ({list.length - shown}개 남음)
@@ -495,7 +522,7 @@ function Feed() {
           )}
 
           {/* 지난 소식: 처음에는 접어 두고, 위 목록을 다 본 뒤에 펼치기 버튼 */}
-          {status === 'ready' && pastHidden && shown >= list.length && (
+          {listReady && pastHidden && shown >= list.length && (
             <button type="button" className="past-fold" onClick={() => setPastOpen(true)}>
               <span>
                 {GROUPS.past} <span className="count">{groupCount.past}</span>
@@ -555,7 +582,7 @@ function Feed() {
         </button>
       )}
 
-      <InstallPrompt />
+      {!isMap && <InstallPrompt />}
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
       {detail && (

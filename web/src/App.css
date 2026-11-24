@@ -125,6 +125,241 @@
   line-height: 1.6;
 }
 
+/* ---------- 지도 보기 ---------- */
+.map-wrap {
+  position: relative;
+  height: calc(100vh - 220px);
+  min-height: 420px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #2a2a4c;
+}
+.map-box {
+  width: 100%;
+  height: 100%;
+}
+.map-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #ececf6;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.map-tools {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+}
+.map-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand-navy);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.map-tool svg {
+  color: var(--brand-pink);
+}
+.map-legend {
+  position: absolute;
+  top: 52px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #333;
+  font-size: 11px;
+  font-weight: 600;
+}
+.map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+/* 핀 색: 영업 중 초록 / 영업 전 파랑 / 종료·휴무 빨강 / 정보 없음 회색 */
+.map-legend i.open,
+.map-pin.open .map-pin-dot {
+  background: #16a34a;
+}
+.map-legend i.before,
+.map-pin.before .map-pin-dot {
+  background: #2563eb;
+}
+.map-legend i.closed,
+.map-pin.closed .map-pin-dot,
+.map-pin.off .map-pin-dot {
+  background: #dc2626;
+}
+.map-pin.unknown .map-pin-dot {
+  background: #8a8f98;
+}
+.map-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+  padding: 4px 9px 4px 6px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: var(--brand-navy);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  position: relative;
+}
+.map-pin::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #fff;
+}
+.map-wrap.far .map-pin:not(.on) .map-pin-name {
+  display: none;
+}
+.map-wrap.far .map-pin:not(.on) {
+  padding: 5px;
+}
+.map-pin.on {
+  background: var(--brand-pink);
+  transform: scale(1.08);
+}
+.map-pin-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+}
+.map-me {
+  width: 16px;
+  height: 16px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.25);
+}
+.map-card {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+.map-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.map-card-head b span {
+  font-weight: 500;
+  color: var(--muted);
+}
+.map-card-addr,
+.map-card-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.map-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.map-card-actions .btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--text);
+}
+.map-card-actions .btn.btn-primary {
+  color: #fff;
+}
+.map-near {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.map-near button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+.map-near-dist {
+  min-width: 48px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+}
+.map-note {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 5;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+}
+@media (max-width: 599px) {
+  .map-wrap {
+    height: calc(100vh - 230px);
+    margin: 0 -12px;
+    border-radius: 0;
+  }
+}
+
 /* ---------- 카드 누르기 ---------- */
 .card-clickable {
   cursor: pointer;

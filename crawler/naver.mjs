@@ -89,6 +89,9 @@ export async function fetchPlace(context, id) {
       roadAddress: base.roadAddress ?? null,
       address: base.address ?? null,
       phone: base.phone ?? base.virtualPhone ?? null,
+      // 좌표 (x = 경도, y = 위도)
+      lat: base.coordinate?.y ? Number(base.coordinate.y) : null,
+      lng: base.coordinate?.x ? Number(base.coordinate.x) : null,
       directions: base.road ?? null,
       homepages: [...homepages],
       hours,

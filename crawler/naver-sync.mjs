@@ -31,6 +31,8 @@ export async function syncNaver({ all = false, limit = 3, log = console.log } = 
       try {
         const p = await fetchPlace(context, b.naver_place_id)
         const row = { naver_name: p.name, naver_category: p.category, naver_updated_at: new Date().toISOString() }
+        // 좌표는 직접 입력 여부와 상관없이 네이버 기준으로 (지도 핀 위치)
+        if (p.lat && p.lng) Object.assign(row, { lat: p.lat, lng: p.lng })
         if (!b.info_manual) {
           Object.assign(row, {
             address: p.roadAddress ?? p.address ?? b.address,
