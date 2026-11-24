@@ -8,10 +8,12 @@ import Status from './Status.jsx'
 import Posts from './Posts.jsx'
 import Review from './Review.jsx'
 import Stats from './Stats.jsx'
+import Feedback from './Feedback.jsx'
 import './admin.css'
 
 const TABS = [
   { id: 'requests', label: '매장 신청' },
+  { id: 'feedback', label: '의견' },
   { id: 'review', label: '기타 검토' },
   { id: 'shops', label: '매장 관리' },
   { id: 'status', label: '수집 상태' },
@@ -141,7 +143,7 @@ function Login() {
 
 function Dashboard({ email }) {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') ?? 'requests')
-  const [badges, setBadges] = useState({ requests: 0, review: 0 })
+  const [badges, setBadges] = useState({ requests: 0, review: 0, feedback: 0 })
 
   const go = (id) => {
     setTab(id)
@@ -150,11 +152,12 @@ function Dashboard({ email }) {
 
   // 탭 옆 숫자: 대기 중인 매장 신청, 검토할 기타 글
   const count = useCallback(async () => {
-    const [r, v] = await Promise.all([
+    const [r, v, f] = await Promise.all([
       supabase.from('shop_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('posts').select('code', { count: 'exact', head: true }).eq('needs_review', true),
+      supabase.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new'),
     ])
-    setBadges({ requests: r.count ?? 0, review: v.count ?? 0 })
+    setBadges({ requests: r.count ?? 0, review: v.count ?? 0, feedback: f.count ?? 0 })
   }, [])
   useEffect(() => {
     count()
@@ -180,6 +183,7 @@ function Dashboard({ email }) {
         ))}
       </nav>
       {tab === 'requests' && <Requests onChange={count} />}
+      {tab === 'feedback' && <Feedback onChange={count} />}
       {tab === 'review' && <Review onChange={count} />}
       {tab === 'shops' && <Shops />}
       {tab === 'status' && <Status />}

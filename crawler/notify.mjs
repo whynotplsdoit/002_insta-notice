@@ -40,15 +40,7 @@ export async function notifyAdmin({ loginRequired = false, errors = [] } = {}, l
       await once(state, 'crawl-error', 6, `⚠️ 수집 중 문제 ${errors.length}건\n${errors.slice(0, 3).join('\n')}`, ADMIN_URL + '?tab=status')
     }
 
-    // 새 매장 신청 (한 번 알린 신청은 다시 알리지 않음)
-    const { data: reqs } = await db.from('shop_requests').select('id, username, display_name').eq('status', 'pending')
-    const told = new Set(state.requests ?? [])
-    const fresh = (reqs ?? []).filter((r) => !told.has(r.id))
-    if (fresh.length) {
-      const list = fresh.map((r) => `@${r.username}${r.display_name ? ` (${r.display_name})` : ''}`).join(', ')
-      await sendAlert(`📮 매장 추가 신청 ${fresh.length}건: ${list}`, ADMIN_URL + '?tab=requests')
-    }
-    state.requests = (reqs ?? []).map((r) => r.id)
+    // 매장 신청·의견은 바로 알리지 않고 Supabase 가 매일 아침 7시에 건수로 알림 (supabase/12-daily-report.sql)
 
     // 검토할 기타 글: 지난번보다 늘었을 때만
     const { count } = await db.from('posts').select('code', { count: 'exact', head: true }).eq('needs_review', true)

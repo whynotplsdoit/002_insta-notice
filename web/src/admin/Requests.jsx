@@ -60,7 +60,9 @@ export default function Requests({ onChange }) {
                     @{r.username}
                   </a>
                   {r.display_name && <span className="a-muted"> · {r.display_name}</span>}
+                  {r.auto_approved && <span className="a-pill info"> 자동 승인</span>}
                   {r.result && <div className="a-muted a-small-text">{r.result}</div>}
+                  {r.auto_note && r.status !== 'rejected' && <div className="a-muted a-small-text">🔎 {r.auto_note}</div>}
                 </div>
                 <span className={`a-pill ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
                 {r.status === 'failed' && (
@@ -72,7 +74,8 @@ export default function Requests({ onChange }) {
             ))}
           </div>
           <p className="a-muted a-small-text">
-            승인하면 이 PC의 크롤러가 15분 안에 부계정 팔로우와 첫 수집을 하고 매장 목록에 추가합니다.
+            승인하면 이 PC의 크롤러가 15분 안에 부계정 팔로우와 첫 수집을 하고 매장 목록에 추가합니다. 새 신청은 크롤러가 먼저
+            자동 검토해서, 확실한 곳은 바로 추가하고(하루 최대 3곳) 확실히 아닌 곳은 거절합니다.
           </p>
         </section>
       )}
@@ -94,6 +97,17 @@ function PendingCard({ req, exists, onUpdate }) {
         <span className="a-muted a-small-text">{fmtTime(req.created_at)} 신청</span>
       </div>
       {req.note && <p className="a-note">“{req.note}”</p>}
+      <p className="a-muted a-small-text">
+        🔎 {req.auto_note ?? '자동 검토 대기 중 (PC 크롤러가 9~24시에 인스타·네이버를 확인합니다)'}
+        {req.naver_place_id && (
+          <>
+            {' '}
+            <a href={`https://map.naver.com/p/entry/place/${req.naver_place_id}`} target="_blank" rel="noopener noreferrer">
+              네이버 지도 ↗
+            </a>
+          </>
+        )}
+      </p>
       {exists && <p className="a-error">이미 등록된 매장입니다. 거절하세요.</p>}
       <div className="a-grid3">
         <label className="a-field">

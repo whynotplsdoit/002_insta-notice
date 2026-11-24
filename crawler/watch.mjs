@@ -15,6 +15,8 @@ import { loadConfig, savePosts, saveProfile, markCrawled } from './store.mjs'
 import { syncNaver } from './naver-sync.mjs'
 import { notifyAdmin } from './notify.mjs'
 import { addShop } from './add-shop.mjs'
+import { reviewRequest, autoAddedToday, AUTO_ADD_PER_DAY } from './review-request.mjs'
+import { openNaverBrowser } from './naver.mjs'
 import { log } from './log.mjs'
 import { cleanupRecords, deleteExpiredPosts, hasNoCaption, loadDeletedCodes, summarize } from './cleanup.mjs'
 
@@ -58,19 +60,59 @@ const { data: recent, error } = await db.from('posts').select('code').order('pos
 if (error) throw new Error(error.message)
 const known = new Set([...recent.map((r) => r.code), ...(await loadDeletedCodes())])
 
-const { data: approved } = await db.from('shop_requests').select('*').eq('status', 'approved').order('created_at')
-
 const context = await openBrowser()
 let failed = 0
 const alerts = { loginRequired: false, errors: [], added: [] } // 카톡 알림용
 try {
-  // 1) 승인된 매장 추가
+  // 0) 새 매장 신청 자동 검토 (한 번에 1건, 표에 자동 검토 칸이 없으면 건너뜀)
+  const { data: toReview } = await db
+    .from('shop_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .is('auto_checked_at', null)
+    .order('created_at')
+    .limit(1)
+  for (const req of toReview ?? []) {
+    const stamp = new Date().toISOString()
+    try {
+      const naver = await openNaverBrowser()
+      let r
+      try {
+        r = await reviewRequest(context, naver.context, req, {
+          registered: new Set(config.accounts.map((a) => a.username)),
+          canAutoAdd: (await autoAddedToday()) < AUTO_ADD_PER_DAY,
+          knownBranches: config.accounts.flatMap((a) => a.branches),
+        })
+      } finally {
+        await naver.browser.close()
+      }
+      const base = { auto_checked_at: stamp, auto_note: r.note.slice(0, 500) }
+      const row =
+        r.decision === 'approve'
+          ? { ...base, status: 'approved', auto_approved: true, reviewed_at: stamp, display_name: r.displayName, region: r.region, account_type: '굿즈샵', naver_place_id: r.naverPlaceId }
+          : r.decision === 'reject'
+            ? { ...base, status: 'rejected', reviewed_at: stamp, result: `자동 거절: ${r.note}`.slice(0, 500) }
+            : { ...base, naver_place_id: r.naverPlaceId, display_name: req.display_name ?? r.displayName, region: req.region ?? r.region }
+      const u = await db.from('shop_requests').update(row).eq('id', req.id)
+      if (u.error) throw new Error(u.error.message)
+      const label = { approve: '자동 승인', reject: '자동 거절', manual: '관리자 확인 필요' }[r.decision]
+      await log(`🔎 매장 신청 @${req.username} ${label}: ${r.note}`, { account: req.username })
+    } catch (err) {
+      if (err instanceof LoginRequiredError) throw err
+      await db.from('shop_requests').update({ auto_checked_at: stamp, auto_note: `자동 검토 실패: ${err.message}`.slice(0, 500) }).eq('id', req.id)
+      await log(`✗ 매장 신청 자동 검토 실패 @${req.username}: ${err.message}`, { level: 'error', account: req.username })
+    }
+    await pause()
+  }
+
+  // 1) 승인된 매장 추가 (관리자 승인 + 자동 승인)
+  const { data: approved } = await db.from('shop_requests').select('*').eq('status', 'approved').order('created_at')
   for (const req of approved ?? []) {
     try {
       if (config.accounts.some((a) => a.username === req.username)) throw new Error('이미 등록된 매장입니다.')
       const r = await addShop(
         context,
-        { username: req.username, displayName: req.display_name, region: req.region, accountType: req.account_type },
+        { username: req.username, displayName: req.display_name, region: req.region, accountType: req.account_type, naverPlaceId: req.naver_place_id },
         config.works,
       )
       const msg = `${r.account.displayName} 추가 완료: 글 ${r.total}개, 사진 ${r.imagesUploaded}장${r.followed === 'failed' ? ' (⚠ 팔로우 실패: 부계정으로 직접 팔로우 필요)' : ''}`

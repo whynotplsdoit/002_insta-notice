@@ -4,6 +4,7 @@ import { configured } from './supabase.js'
 import { usePosts } from './usePosts.js'
 import PostCard from './PostCard.jsx'
 import RequestShop from './RequestShop.jsx'
+import Feedback from './Feedback.jsx'
 import ShopInfo from './ShopInfo.jsx'
 import PostDetail from './PostDetail.jsx'
 import InstallPrompt from './InstallPrompt.jsx'
@@ -87,6 +88,7 @@ function Feed() {
     }
   }, [filtersOpen])
   const [requestOpen, setRequestOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [shopInfo, setShopInfo] = useState(null) // { username, branches: 글에 적힌 지점 }
   const [detail, setDetail] = useState(null) // 상세 창에 연 글
   const [sortMode, setSortMode] = useState(saved.sortMode === 'posted' ? 'posted' : 'schedule')
@@ -383,8 +385,19 @@ function Feed() {
       <header className="header">
         <div className="header-inner">
           <h1 className="logo">
-            <img className="logo-icon" src="/favicon-64.png" alt="" width="30" height="30" />
-            굿즈레이더
+            {/* 로고 누르면 처음 화면: 전체 탭 · 검색어 지움 · 맨 위로 (필터는 그대로) */}
+            <button
+              type="button"
+              className="logo-btn"
+              onClick={() => {
+                setFiltersOpen(false)
+                setQuery('')
+                selectTab('전체')
+              }}
+            >
+              <img className="logo-icon" src="/favicon-64.png" alt="" width="30" height="30" />
+              굿즈레이더
+            </button>
           </h1>
           <div className="header-tools">
             <button
@@ -568,6 +581,9 @@ function Feed() {
           )}
 
           <footer className="site-footer">
+            <button type="button" className="feedback-btn" onClick={() => setFeedbackOpen(true)}>
+              💬 의견 보내기
+            </button>
             <p>
               <b>출처</b> · 굿즈레이더는 각 매장 인스타그램의 공개 게시물을 모아 보여줍니다. 게시물의 글과 사진에 대한 권리는
               해당 매장에 있으며, 각 소식의 <b>인스타그램</b> 버튼으로 원문을 확인할 수 있습니다. 정확한 내용은 매장 게시물을 확인해
@@ -616,6 +632,12 @@ function Feed() {
       {!isMap && !filtersOpen && <InstallPrompt />}
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
+      {feedbackOpen && (
+        <Feedback
+          context={[TABS.find((t) => t.id === tab)?.label, detail && `글 ${detail.code}`].filter(Boolean).join(' · ')}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      )}
       {detail && (
         <PostDetail
           post={posts.find((x) => x.code === detail.code) ?? detail}

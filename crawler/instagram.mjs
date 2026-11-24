@@ -145,6 +145,19 @@ function collectProfile(value, username, out) {
 // 한 매장의 최근 게시물(보통 12개)을 가져옵니다.
 // 반환한 배열에 .profile (프로필 사진·이름·소개글·링크)이 붙어 있습니다. 못 찾으면 null.
 export async function fetchAccount(context, username) {
+  const r = await readAccountPage(context, username)
+  if (r.posts.length === 0) throw new Error('게시물을 찾지 못했습니다.')
+  r.posts.profile = r.profile
+  return r.posts
+}
+
+// 매장 신청 자동 검토용: 팔로우하지 않고 계정 페이지만 봄
+// 반환: { status: 'ok' | 'missing' | 'private' | 'empty', fullName, profile, posts }
+export async function inspectAccount(context, username) {
+  return readAccountPage(context, username, { inspect: true })
+}
+
+async function readAccountPage(context, username, { inspect = false } = {}) {
   const page = await context.newPage()
   const found = new Map()
   const profile = { found: null }
@@ -165,9 +178,19 @@ export async function fetchAccount(context, username) {
   })
 
   try {
-    await page.goto(`https://www.instagram.com/${username}/`, { waitUntil: 'domcontentloaded' })
+    const res = await page.goto(`https://www.instagram.com/${username}/`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(6000)
     if (page.url().includes('/accounts/login')) throw new LoginRequiredError()
+
+    let status = 'ok'
+    let fullName = null
+    if (inspect) {
+      fullName = (await page.title()).match(/^(.*?)\s*\(@/)?.[1]?.trim() || null
+      if (res?.status() === 404 || (await page.getByText(/페이지를 사용할 수 없습니다|Sorry, this page isn't available/).count())) {
+        return { status: 'missing', fullName: null, profile: null, posts: [] }
+      }
+      if (await page.getByText(/비공개 (프로필|계정)입니다|This account is private/).count()) status = 'private'
+    }
 
     // 첫 화면 HTML 안에 들어 있는 데이터도 확인
     const html = await page.content()
@@ -188,9 +211,8 @@ export async function fetchAccount(context, username) {
       .map(toPost)
       .filter((p) => !p.owner || p.owner === username)
       .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
-    if (posts.length === 0) throw new Error('게시물을 찾지 못했습니다.')
-    posts.profile = profile.found
-    return posts
+    if (status === 'ok' && posts.length === 0) status = 'empty'
+    return { status, fullName: fullName ?? profile.found?.fullName ?? null, profile: profile.found, posts }
   } finally {
     await page.close()
   }
