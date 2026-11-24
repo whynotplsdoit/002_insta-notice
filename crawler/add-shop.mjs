@@ -1,7 +1,7 @@
 // 매장 추가: 계정 확인 → 부계정 팔로우 → 첫 수집 → DB에 매장 추가
 // 관리자 화면에서 승인된 신청(watch.mjs)과 명령(shops.mjs)에서 함께 씁니다.
 import { fetchAccount, followAccount } from './instagram.mjs'
-import { addAccount, savePosts, markCrawled } from './store.mjs'
+import { addAccount, savePosts, saveProfile, markCrawled } from './store.mjs'
 
 // 최근 글의 절반 이상에 붙는 해시태그 = 매장이 늘 붙이는 고정 해시태그
 export function detectFixedHashtags(posts) {
@@ -29,6 +29,7 @@ export async function addShop(context, { username, displayName, region, accountT
   }
   await addAccount(account)
   const r = await savePosts(account, posts, works)
+  await saveProfile(username, posts.profile).catch(() => {})
   await markCrawled(username)
   return { account, followed, total: r.total, imagesUploaded: r.imagesUploaded }
 }

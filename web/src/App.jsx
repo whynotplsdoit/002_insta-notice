@@ -4,6 +4,7 @@ import { configured } from './supabase.js'
 import { usePosts } from './usePosts.js'
 import PostCard from './PostCard.jsx'
 import RequestShop from './RequestShop.jsx'
+import ShopInfo from './ShopInfo.jsx'
 import { BoxIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
@@ -55,6 +56,7 @@ function Feed() {
   const [hidePast, setHidePast] = useState(saved.hidePast ?? false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [requestOpen, setRequestOpen] = useState(false)
+  const [shopInfo, setShopInfo] = useState(null) // { username, branches: 글에 적힌 지점 }
   const [sortMode, setSortMode] = useState(saved.sortMode === 'posted' ? 'posted' : 'schedule')
   const [now, setNow] = useState(Date.now())
 
@@ -370,6 +372,7 @@ function Feed() {
                     shopName={shopOf.get(p.account_username)?.display_name ?? p.account_username}
                     showBranch={(branchCount.get(p.account_username) ?? 0) > 1}
                     isNew={now - new Date(p.first_seen_at).getTime() < NEW_MS && now - new Date(p.posted_at).getTime() < NEW_MS}
+                    onShopClick={() => setShopInfo({ username: p.account_username, branches: p.branches })}
                   />
                 </Fragment>
               ))}
@@ -399,6 +402,22 @@ function Feed() {
       </nav>
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
+      {shopInfo && shopOf.get(shopInfo.username) && (
+        <ShopInfo
+          account={shopOf.get(shopInfo.username)}
+          branches={branches.filter((b) => b.account_username === shopInfo.username)}
+          posts={posts.filter((p) => p.account_username === shopInfo.username)}
+          focusBranches={shopInfo.branches}
+          now={now}
+          onClose={() => setShopInfo(null)}
+          onShowOnly={() => {
+            setShops([shopInfo.username])
+            setTab('전체')
+            setShopInfo(null)
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+        />
+      )}
     </div>
   )
 }

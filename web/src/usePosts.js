@@ -23,8 +23,11 @@ export function usePosts() {
   const load = useCallback(async () => {
     const [p, a, b] = await Promise.all([
       supabase.from('posts').select(COLUMNS).eq('hidden', false).order('posted_at', { ascending: false }).limit(LIMIT),
-      supabase.from('accounts').select('username, display_name, account_type').eq('hidden', false),
-      supabase.from('branches').select('account_username, name, region'),
+      supabase
+        .from('accounts')
+        .select('username, display_name, account_type, ig_full_name, bio, external_url, profile_image_path, profile_updated_at')
+        .eq('hidden', false),
+      supabase.from('branches').select('*').order('id'),
     ])
     if (p.error || a.error || b.error) {
       setStatus('error')

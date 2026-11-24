@@ -3,6 +3,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { ACCOUNT_TYPES, ago, fromList, toList } from './util.js'
 
+// 네이버 지도 링크에서 장소 번호 뽑기 (map.naver.com/p/entry/place/123…, m.place.naver.com/place/123, 숫자만)
+const placeIdOf = (text) => {
+  const t = text.trim()
+  if (!t) return null
+  return t.match(/place\/(\d{5,})/)?.[1] ?? (/^\d{5,}$/.test(t) ? t : null)
+}
+
 export default function Shops() {
   const [shops, setShops] = useState(null)
   const [branches, setBranches] = useState([])
@@ -72,7 +79,13 @@ function ShopEditor({ shop, branches, onSaved, onDeleted }) {
     hidden: shop.hidden,
     fixed_hashtags: fromList(shop.fixed_hashtags),
   })
-  const [list, setList] = useState(branches.map((b) => ({ ...b, aliasText: fromList(b.aliases) })))
+  const [list, setList] = useState(
+    branches.map((b) => ({
+      ...b,
+      aliasText: fromList(b.aliases),
+      naverText: b.naver_place_id ? `https://map.naver.com/p/entry/place/${b.naver_place_id}` : '',
+    })),
+  )
   const [removed, setRemoved] = useState([])
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
@@ -81,6 +94,8 @@ function ShopEditor({ shop, branches, onSaved, onDeleted }) {
   const save = async () => {
     if (!form.display_name.trim()) return alert('매장 이름을 입력하세요.')
     if (list.some((b) => !b.name.trim())) return alert('지점 이름을 입력하세요.')
+    const bad = list.find((b) => b.naverText?.trim() && !placeIdOf(b.naverText))
+    if (bad) return alert(`'${bad.name}' 지점의 네이버 지도 링크에서 장소 번호를 찾지 못했습니다.\nmap.naver.com 에서 매장을 연 뒤 주소창의 링크를 붙여넣어 주세요.`)
     setSaving(true)
     const errors = []
     const r = await supabase
@@ -99,7 +114,19 @@ function ShopEditor({ shop, branches, onSaved, onDeleted }) {
       if (d.error) errors.push(d.error.message)
     }
     for (const b of list) {
-      const row = { name: b.name.trim(), region: b.region?.trim() || null, address: b.address?.trim() || null, aliases: toList(b.aliasText ?? '') }
+      const placeId = placeIdOf(b.naverText ?? '')
+      const row = {
+        name: b.name.trim(),
+        region: b.region?.trim() || null,
+        address: b.address?.trim() || null,
+        phone: b.phone?.trim() || null,
+        hours_note: b.hours_note?.trim() || null,
+        info_manual: Boolean(b.info_manual),
+        aliases: toList(b.aliasText ?? ''),
+        naver_place_id: placeId,
+        // 네이버 장소가 바뀌면 다음 자동 확인 때 바로 다시 읽도록
+        ...(placeId !== (b.naver_place_id ?? null) ? { naver_updated_at: null } : {}),
+      }
       const q = b.id
         ? await supabase.from('branches').update(row).eq('id', b.id)
         : await supabase.from('branches').insert({ ...row, account_username: shop.username })
@@ -145,24 +172,53 @@ function ShopEditor({ shop, branches, onSaved, onDeleted }) {
       <div className="a-field">
         <span>지점</span>
         {list.map((b, i) => (
-          <div key={b.id ?? `new-${i}`} className="a-branch">
-            <input className="a-input" value={b.name} onChange={(e) => setBranch(i, 'name', e.target.value)} placeholder="지점 이름 (예: 홍대점)" />
-            <input className="a-input" value={b.region ?? ''} onChange={(e) => setBranch(i, 'region', e.target.value)} placeholder="지역 (예: 홍대)" />
+          <div key={b.id ?? `new-${i}`} className="a-branch-box">
+            <div className="a-branch">
+              <input className="a-input" value={b.name} onChange={(e) => setBranch(i, 'name', e.target.value)} placeholder="지점 이름 (예: 홍대점)" />
+              <input className="a-input" value={b.region ?? ''} onChange={(e) => setBranch(i, 'region', e.target.value)} placeholder="지역 (예: 홍대)" />
+              <input
+                className="a-input"
+                value={b.aliasText ?? ''}
+                onChange={(e) => setBranch(i, 'aliasText', e.target.value)}
+                placeholder="글에서 지점을 알아볼 단어 (쉼표)"
+              />
+              <button
+                className="a-btn a-small"
+                onClick={() => {
+                  if (b.id) setRemoved([...removed, b.id])
+                  setList(list.filter((_, j) => j !== i))
+                }}
+              >
+                빼기
+              </button>
+            </div>
             <input
               className="a-input"
-              value={b.aliasText ?? ''}
-              onChange={(e) => setBranch(i, 'aliasText', e.target.value)}
-              placeholder="글에서 지점을 알아볼 단어 (쉼표)"
+              value={b.naverText ?? ''}
+              onChange={(e) => setBranch(i, 'naverText', e.target.value)}
+              placeholder="네이버 지도 링크 (map.naver.com 에서 매장을 열고 주소창 링크 붙여넣기)"
             />
-            <button
-              className="a-btn a-small"
-              onClick={() => {
-                if (b.id) setRemoved([...removed, b.id])
-                setList(list.filter((_, j) => j !== i))
-              }}
-            >
-              빼기
-            </button>
+            <div className="a-branch-info">
+              <input className="a-input" value={b.address ?? ''} onChange={(e) => setBranch(i, 'address', e.target.value)} placeholder="주소" />
+              <input className="a-input" value={b.phone ?? ''} onChange={(e) => setBranch(i, 'phone', e.target.value)} placeholder="전화번호" />
+            </div>
+            <input
+              className="a-input"
+              value={b.hours_note ?? ''}
+              onChange={(e) => setBranch(i, 'hours_note', e.target.value)}
+              placeholder="영업시간 메모 (예: 매주 화요일 휴무, 공휴일 단축 영업)"
+            />
+            <div className="a-branch-foot">
+              <label className="a-check">
+                <input type="checkbox" checked={Boolean(b.info_manual)} onChange={(e) => setBranch(i, 'info_manual', e.target.checked)} />
+                직접 입력한 정보 유지 (네이버 갱신이 주소·전화·영업시간을 덮어쓰지 않음)
+              </label>
+              <span className="a-muted a-small-text">
+                {b.naver_place_id
+                  ? `네이버: ${b.naver_name ?? '-'} · ${b.hours ? '영업시간 있음' : '영업시간 없음'} · ${b.naver_updated_at ? ago(b.naver_updated_at) + ' 갱신' : '갱신 대기'}`
+                  : '네이버 미연결'}
+              </span>
+            </div>
           </div>
         ))}
         <button className="a-btn a-small a-add" onClick={() => setList([...list, { name: '', region: '', aliasText: '' }])}>

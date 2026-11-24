@@ -11,7 +11,8 @@
 //   --hidden                 브라우저 창 없이 실행 (작업 스케줄러용)
 import { db } from './db.mjs'
 import { openBrowser, fetchAccount, fetchFollowingFeed, LoginRequiredError } from './instagram.mjs'
-import { loadConfig, savePosts, markCrawled } from './store.mjs'
+import { loadConfig, savePosts, saveProfile, markCrawled } from './store.mjs'
+import { syncNaver } from './naver-sync.mjs'
 import { addShop } from './add-shop.mjs'
 import { log } from './log.mjs'
 import { cleanupRecords, deleteExpiredPosts, hasNoCaption, loadDeletedCodes, summarize } from './cleanup.mjs'
@@ -105,6 +106,7 @@ try {
     try {
       const posts = await fetchAccount(context, username)
       const r = await savePosts(account, posts, config.works)
+      await saveProfile(username, posts.profile).catch(() => {}) // 프로필 저장 실패는 수집을 멈추지 않음
       await markCrawled(username)
       const why = stale?.username === username ? ' (정기 확인)' : ''
       await log(`✓ ${account.displayName}${why}: 새 글 ${r.added}개, 사진 ${r.imagesUploaded}장`, { account: username })
@@ -119,5 +121,13 @@ try {
   await log(`✗ ${err.message}`, { level: 'error' })
 } finally {
   await context.close()
+}
+
+// 지점 정보를 네이버 지도에서 갱신 (일주일 지난 지점만, 한 번에 3곳까지)
+try {
+  const n = await syncNaver({ limit: 3, log })
+  if (n) await log(`📍 네이버 지점 정보 ${n}곳 갱신`)
+} catch (err) {
+  await log(`✗ 네이버 지점 정보 갱신 실패: ${err.message}`, { level: 'error' })
 }
 process.exitCode = failed ? 1 : 0

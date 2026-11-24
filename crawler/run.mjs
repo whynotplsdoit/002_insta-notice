@@ -6,7 +6,7 @@
 //   npm run crawl -- kuji.run        특정 매장만 (여러 개 가능)
 //   --no-wait                        매장 사이 1~3분 쉬는 것 생략 (시험용)
 import { openBrowser, fetchAccount, LoginRequiredError } from './instagram.mjs'
-import { loadConfig, savePosts, markCrawled } from './store.mjs'
+import { loadConfig, savePosts, saveProfile, markCrawled } from './store.mjs'
 import { log } from './log.mjs'
 
 const ACTIVE_HOURS = [10, 22] // 한국 시각, 이 시간에만 자동 수집
@@ -62,6 +62,7 @@ try {
     try {
       const posts = await fetchAccount(context, account.username)
       const r = await savePosts(account, posts, config.works)
+      await saveProfile(account.username, posts.profile).catch(() => {})
       await markCrawled(account.username)
       await log(`✓ ${account.displayName}: 글 ${r.total}개, 새 글 ${r.added}개, 사진 ${r.imagesUploaded}장`)
       if (r.added === r.total && r.total >= 12) {

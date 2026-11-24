@@ -126,17 +126,39 @@ export async function fetchFollowingFeed(context, knownCodes, { maxScrolls = 6 }
   }
 }
 
+// JSON 안에서 이 계정의 프로필 정보(username + biography)를 찾음
+function collectProfile(value, username, out) {
+  if (!value || typeof value !== 'object' || out.found) return
+  if (Array.isArray(value)) return value.forEach((v) => collectProfile(v, username, out))
+  if (value.username === username && typeof value.biography === 'string') {
+    out.found = {
+      fullName: value.full_name || null,
+      bio: value.biography || null,
+      externalUrl: value.external_url || value.bio_links?.[0]?.url || null,
+      profilePicUrl: value.hd_profile_pic_url_info?.url || value.profile_pic_url_hd || value.profile_pic_url || null,
+    }
+    return
+  }
+  for (const v of Object.values(value)) collectProfile(v, username, out)
+}
+
 // 한 매장의 최근 게시물(보통 12개)을 가져옵니다.
+// 반환한 배열에 .profile (프로필 사진·이름·소개글·링크)이 붙어 있습니다. 못 찾으면 null.
 export async function fetchAccount(context, username) {
   const page = await context.newPage()
   const found = new Map()
+  const profile = { found: null }
   page.on('response', async (res) => {
     const type = res.headers()['content-type'] ?? ''
     if (!type.includes('json') && !type.includes('javascript')) return
     try {
       const text = await res.text()
-      if (!text.includes('taken_at')) return
-      collectPosts(JSON.parse(text.replace(/^for \(;;\);/, '')), found)
+      const hasPosts = text.includes('taken_at')
+      const hasProfile = !profile.found && text.includes('"biography"')
+      if (!hasPosts && !hasProfile) return
+      const json = JSON.parse(text.replace(/^for \(;;\);/, ''))
+      if (hasPosts) collectPosts(json, found)
+      if (hasProfile) collectProfile(json, username, profile)
     } catch {
       // JSON이 아니거나 읽을 수 없는 응답은 무시
     }
@@ -150,9 +172,13 @@ export async function fetchAccount(context, username) {
     // 첫 화면 HTML 안에 들어 있는 데이터도 확인
     const html = await page.content()
     for (const m of html.matchAll(/<script type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) {
-      if (!m[1].includes('taken_at')) continue
+      const hasPosts = m[1].includes('taken_at')
+      const hasProfile = !profile.found && m[1].includes('"biography"')
+      if (!hasPosts && !hasProfile) continue
       try {
-        collectPosts(JSON.parse(m[1]), found)
+        const json = JSON.parse(m[1])
+        if (hasPosts) collectPosts(json, found)
+        if (hasProfile) collectProfile(json, username, profile)
       } catch {
         // 무시
       }
@@ -163,6 +189,7 @@ export async function fetchAccount(context, username) {
       .filter((p) => !p.owner || p.owner === username)
       .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
     if (posts.length === 0) throw new Error('게시물을 찾지 못했습니다.')
+    posts.profile = profile.found
     return posts
   } finally {
     await page.close()

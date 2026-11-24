@@ -5,7 +5,7 @@ import { scheduleLabel } from './sort.js'
 
 const MAX_WORKS = 3
 
-export default function PostCard({ post, now, shopName, showBranch, isNew }) {
+export default function PostCard({ post, now, shopName, showBranch, isNew, onShopClick }) {
   const [open, setOpen] = useState(false)
   const [imgFailed, setImgFailed] = useState(false)
   const title = titleOf(post.caption)
@@ -42,10 +42,11 @@ export default function PostCard({ post, now, shopName, showBranch, isNew }) {
 
       <div className="card-body">
         <div className="card-meta">
-          <span className="shop">
+          <button type="button" className="shop" onClick={onShopClick} title="매장 정보 보기">
             {shopName}
             {showBranch && post.branches.length > 0 && <span className="branch"> · {post.branches.join(', ')}</span>}
-          </span>
+            <span className="shop-info-icon" aria-hidden="true">ⓘ</span>
+          </button>
           <time dateTime={post.posted_at} title={new Date(post.posted_at).toLocaleString('ko-KR')}>
             {timeAgo(post.posted_at, now)}
           </time>

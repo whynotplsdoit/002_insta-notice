@@ -161,6 +161,30 @@ export async function savePosts(account, posts, works) {
   return { total: classified.length, added: classified.filter((p) => !known.has(p.code)).length, imagesUploaded }
 }
 
+// 인스타 프로필(이름·소개글·링크·사진) 저장. 사진은 일주일에 한 번만 다시 올림
+const PROFILE_IMAGE_DAYS = 7
+export async function saveProfile(username, profile) {
+  if (!profile) return
+  const { data: cur } = await db
+    .from('accounts')
+    .select('profile_image_path, profile_updated_at')
+    .eq('username', username)
+    .maybeSingle()
+  const row = { ig_full_name: profile.fullName, bio: profile.bio, external_url: profile.externalUrl }
+  const stale =
+    !cur?.profile_image_path ||
+    !cur.profile_updated_at ||
+    Date.now() - new Date(cur.profile_updated_at).getTime() > PROFILE_IMAGE_DAYS * 86400000
+  if (stale && profile.profilePicUrl) {
+    const path = await uploadImage('_profiles', username, profile.profilePicUrl)
+    if (path) {
+      row.profile_image_path = path
+      row.profile_updated_at = new Date().toISOString()
+    }
+  }
+  check('프로필 저장', await db.from('accounts').update(row).eq('username', username))
+}
+
 export async function markCrawled(username) {
   check(
     '수집 시각 저장',
