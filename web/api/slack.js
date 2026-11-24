@@ -1,4 +1,5 @@
 // 슬랙 관리 봇: 채널에서 "@goods-radar 신청 / 의견 / 기타" 로 목록을 부르고, 버튼으로 바로 처리
+//   조회만: "@goods-radar 매장 / 수집 / 통계 [오늘|7일|30일|90일]"
 //   매장 신청: [승인] [거절]   (승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집)
 //   의견:      [확인함] [삭제]
 //   기타 검토: [게시] [삭제]   (삭제는 글·사진을 지우고 다시 수집되지 않게 기록, 되돌릴 수 없음)
@@ -74,11 +75,207 @@ const msg = (text, blocks) => ({ text, blocks })
 
 const HELP = [
   '*굿즈레이더 관리 봇* 사용법',
+  '*처리*',
   '• `@goods-radar 신청`: 확인이 필요한 매장 신청 → [승인] [거절]',
   '• `@goods-radar 의견`: 확인 안 한 새 의견 → [확인함] [삭제]  (`의견 전체`: 최근 의견)',
   '• `@goods-radar 기타`: 기타 검토 대기 글 → [게시] [삭제]',
+  '*조회*',
+  '• `@goods-radar 매장`: 매장 수·매장 목록',
+  '• `@goods-radar 수집`: 마지막 자동 확인·수집 중인 매장·오래 수집 안 된 매장·분류별 글 수',
+  '• `@goods-radar 통계`: 사용 통계 (기본 7일, `통계 오늘` / `통계 30일` / `통계 90일`)',
   '• `@goods-radar 도움말`: 이 안내',
 ].join('\n')
+
+const CATEGORIES = ['입고', '콜라보·팝업', '이벤트·안내', '기타']
+const STALE_HOURS = 26 // 정기 확인이 24시간마다라 이보다 오래되면 문제 (관리자 화면과 같음)
+const DAY = 86400000
+const ago = (iso) => {
+  if (!iso) return '기록 없음'
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 1) return '방금'
+  if (m < 60) return `${m}분 전`
+  if (m < 60 * 24) return `${Math.floor(m / 60)}시간 전`
+  return `${Math.floor(m / 1440)}일 전`
+}
+const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0)
+const bar = (n, max) => '▇'.repeat(max ? Math.max(n ? 1 : 0, Math.round((n / max) * 10)) : 0)
+const rank = (rows, n = 5) => (rows.length ? rows.slice(0, n).map(([k, v], i) => `${i + 1}. ${esc(k)}  *${v}*`).join('\n') : '_기록 없음_')
+const countBy = (arr, keyFn) => {
+  const m = new Map()
+  for (const x of arr) {
+    const k = keyFn(x)
+    if (k == null || k === '') continue
+    m.set(k, (m.get(k) ?? 0) + 1)
+  }
+  return [...m].sort((a, b) => b[1] - a[1])
+}
+// 본문 첫 줄 (해시태그·이모지 줄 건너뜀)
+const titleOf = (caption) =>
+  String(caption ?? '')
+    .split('\n')
+    .map((l) => l.replace(/#[^\s#]+/g, '').trim())
+    .find((l) => (l.match(/[가-힣A-Za-z]/g) ?? []).length >= 2) ?? ''
+
+// ---------- 조회: 매장 ----------
+async function viewShops(db) {
+  const [a, b, p] = await Promise.all([
+    db.from('accounts').select('username, display_name, account_type, hidden, last_crawled_at').order('display_name'),
+    db.from('branches').select('account_username, name, region'),
+    db.from('posts').select('account_username').limit(10000),
+  ])
+  if (a.error) throw a.error
+  const posts = new Map(countBy(p.data ?? [], (x) => x.account_username))
+  const shown = a.data.filter((s) => !s.hidden)
+  const hidden = a.data.filter((s) => s.hidden)
+  const line = (s) => {
+    const br = (b.data ?? []).filter((x) => x.account_username === s.username)
+    const regions = [...new Set(br.map((x) => x.region).filter(Boolean))].join('·')
+    return `• <https://www.instagram.com/${s.username}/|*${esc(s.display_name)}*>  ${esc(regions || '지역 없음')}${br.length > 1 ? ` (지점 ${br.length})` : ''}${s.account_type && s.account_type !== '굿즈샵' ? ` · ${esc(s.account_type)}` : ''}\n      글 ${posts.get(s.username) ?? 0}개 · 마지막 수집 ${ago(s.last_crawled_at)}`
+  }
+  const blocks = [section(`🏪 *매장 ${shown.length}곳*${hidden.length ? `  (숨김 ${hidden.length}곳 별도)` : ''}`)]
+  // 섹션 하나에 3000자 제한이 있어 8곳씩 나눔
+  for (let i = 0; i < shown.length; i += 8) blocks.push(section(shown.slice(i, i + 8).map(line).join('\n')))
+  if (hidden.length) blocks.push(context(`숨긴 매장: ${hidden.map((s) => esc(s.display_name)).join(', ')}`))
+  blocks.push(context(`<${SITE}/admin?tab=shops|관리자 화면에서 매장 관리>`))
+  return msg(`매장 ${shown.length}곳`, blocks)
+}
+
+// ---------- 조회: 수집 상태 ----------
+async function viewStatus(db) {
+  const head = (q) => q.then(({ count }) => count ?? 0)
+  const posts = () => db.from('posts').select('code', { count: 'exact', head: true })
+  const [l, a, total, review, ...byCat] = await Promise.all([
+    db.from('crawl_logs').select('created_at, message, level').order('created_at', { ascending: false }).limit(200),
+    db.from('accounts').select('display_name, last_crawled_at, hidden'),
+    head(posts()),
+    head(posts().eq('needs_review', true)),
+    ...CATEGORIES.map((c) => head(posts().eq('category', c))),
+  ])
+  if (l.error) throw l.error
+  const logs = l.data
+  const lastRun = logs.find((x) => x.message.startsWith('피드 확인'))
+  const loginError = logs.find((x) => x.message.includes('로그인이 풀려'))
+  const loginBroken = loginError && (!lastRun || new Date(loginError.created_at) > new Date(lastRun.created_at))
+  const shops = (a.data ?? []).filter((s) => !s.hidden)
+  const stale = shops.filter((s) => !s.last_crawled_at || Date.now() - new Date(s.last_crawled_at).getTime() > STALE_HOURS * 3600000)
+  const quiet = lastRun && Date.now() - new Date(lastRun.created_at).getTime() > 60 * 60000
+  const problems = logs.filter((x) => x.level !== 'info' && Date.now() - new Date(x.created_at).getTime() < DAY)
+
+  const blocks = [section('📡 *수집 상태*')]
+  if (loginBroken) blocks.push(section(`🚨 *인스타 로그인이 풀렸습니다.* PC에서 \`npm run login\` 으로 다시 로그인하세요. (${fmtTime(loginError.created_at)})`))
+  blocks.push({
+    type: 'section',
+    fields: [
+      { type: 'mrkdwn', text: `*마지막 자동 확인*\n${ago(lastRun?.created_at)}${quiet ? ' ⚠️' : ''}\n_15분마다 · 9~24시_` },
+      { type: 'mrkdwn', text: `*수집 중인 매장*\n${shops.length}곳` },
+      { type: 'mrkdwn', text: `*오래 수집 안 된 매장*\n${stale.length ? `⚠️ ${stale.length}곳: ${stale.map((s) => esc(s.display_name)).join(', ')}` : '없음 ✅'}` },
+      { type: 'mrkdwn', text: `*최근 24시간 문제 기록*\n${problems.length ? `⚠️ ${problems.length}건` : '없음 ✅'}` },
+    ],
+  })
+  if (quiet) blocks.push(context('⚠️ 1시간 넘게 자동 확인 기록이 없습니다. 밤(0~9시)이 아니라면 PC가 꺼졌거나 작업 스케줄러가 멈췄을 수 있습니다.'))
+  const max = Math.max(...byCat)
+  blocks.push(
+    section(
+      `*수집된 글 ${total}개*${review ? `  (기타 검토 대기 ${review})` : ''}\n` +
+        CATEGORIES.map((c, i) => `${c}  *${byCat[i]}개* (${pct(byCat[i], total)}%)  ${bar(byCat[i], max)}`).join('\n'),
+    ),
+  )
+  if (problems.length) blocks.push(section(`*최근 문제 기록*\n${problems.slice(0, 5).map((x) => `• ${fmtTime(x.created_at)} ${esc(oneLine(x.message, 120))}`).join('\n')}`))
+  blocks.push(context(`<${SITE}/admin?tab=status|관리자 화면에서 수집 기록 보기>`))
+  return msg(`수집 상태: 마지막 확인 ${ago(lastRun?.created_at)}`, blocks)
+}
+
+// ---------- 조회: 통계 ----------
+const FEATURE_LABELS = {
+  tab: '분류 탭 바꾸기', sort: '정렬 바꾸기', filter: '필터 사용', search: '검색', more: '글 상세 보기', new_posts: '새 소식 버튼',
+  shop_open: '매장 정보 창 열기', shop_only: '이 매장 소식만 보기', map_click: '네이버 지도', phone_click: '전화 걸기',
+  insta_click: '인스타그램 이동', request_open: '매장 추가 신청 창', request_submit: '매장 추가 신청 완료',
+}
+const DEVICE_LABELS = { mobile: '휴대폰', tablet: '태블릿', pc: 'PC' }
+const kstDay = (iso) => new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10)
+
+async function viewStats(db, text) {
+  const days = /오늘|1일/.test(text) ? 1 : /90/.test(text) ? 90 : /30|한\s*달/.test(text) ? 30 : 7
+  const since = new Date(Date.now() - days * DAY).toISOString()
+  const rows = []
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data, error } = await db
+      .from('events')
+      .select('created_at, visitor_id, session_id, type, target, meta, device')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .range(from, from + 999)
+    if (error) throw error
+    rows.push(...data)
+    if (data.length < 1000) break
+  }
+  const { data: accts } = await db.from('accounts').select('username, display_name')
+  const names = new Map((accts ?? []).map((x) => [x.username, x.display_name]))
+  const visits = rows.filter((r) => r.type === 'visit')
+  const byType = (t) => rows.filter((r) => r.type === t)
+
+  // 일별 방문자
+  const dayMap = new Map()
+  for (let i = Math.min(days, 14) - 1; i >= 0; i--) dayMap.set(kstDay(new Date(Date.now() - i * DAY).toISOString()), new Set())
+  for (const r of rows) dayMap.get(kstDay(r.created_at))?.add(r.visitor_id)
+  const daily = [...dayMap].map(([d, s]) => [d.slice(5).replace('-', '.'), s.size])
+  const dmax = Math.max(1, ...daily.map((d) => d[1]))
+
+  // 매장별 관심도 (정보 창 + 인스타 이동 + 지도 + 전화)
+  const score = new Map()
+  const add = (u) => u && score.set(u, (score.get(u) ?? 0) + 1)
+  for (const r of byType('shop_open')) add(r.target)
+  for (const r of byType('insta_click')) add(r.meta?.shop)
+  for (const r of byType('map_click')) add(r.target)
+  for (const r of byType('phone_click')) add(r.target)
+  const shops = [...score].sort((a, b) => b[1] - a[1]).map(([u, n]) => [names.get(u) ?? u, n])
+
+  // 인스타 이동 많은 글 (제목)
+  const topPosts = countBy(byType('insta_click'), (r) => r.target).slice(0, 5)
+  const { data: pp } = topPosts.length ? await db.from('posts').select('code, caption, account_username').in('code', topPosts.map((x) => x[0])) : { data: [] }
+  const pmap = new Map((pp ?? []).map((x) => [x.code, x]))
+  const postLines = topPosts.length
+    ? topPosts
+        .map(([code, n], i) => {
+          const p = pmap.get(code)
+          const label = p ? `${names.get(p.account_username) ?? ''} · ${oneLine(titleOf(p.caption) || '(본문 없음)', 40)}` : `${code} (삭제된 글)`
+          return `${i + 1}. <https://www.instagram.com/p/${code}/|${esc(label)}>  *${n}*`
+        })
+        .join('\n')
+    : '_기록 없음_'
+
+  const label = days === 1 ? '오늘(24시간)' : `최근 ${days}일`
+  const blocks = [
+    section(`📊 *사용 통계 · ${label}*`),
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*방문자*\n${new Set(rows.map((r) => r.visitor_id)).size.toLocaleString('ko-KR')}명` },
+        { type: 'mrkdwn', text: `*방문*\n${new Set(visits.map((r) => r.session_id)).size.toLocaleString('ko-KR')}회` },
+        { type: 'mrkdwn', text: `*기록된 행동*\n${rows.length.toLocaleString('ko-KR')}건` },
+        { type: 'mrkdwn', text: `*매장 추가 신청*\n${byType('request_submit').length}건` },
+      ],
+    },
+  ]
+  if (days > 1) blocks.push(section(`*일별 방문자*${days > 14 ? ' (최근 14일)' : ''}\n${daily.map(([d, n]) => `\`${d}\` ${bar(n, dmax)} ${n}`).join('\n')}`))
+  blocks.push(
+    { type: 'section', fields: [
+      { type: 'mrkdwn', text: `*기기*\n${rank(countBy(visits, (r) => DEVICE_LABELS[r.device] ?? r.device), 3)}` },
+      { type: 'mrkdwn', text: `*유입 경로*\n${rank(countBy(visits, (r) => r.meta?.ref ?? '직접 방문·북마크'), 5)}` },
+    ] },
+    { type: 'section', fields: [
+      { type: 'mrkdwn', text: `*매장별 관심도*\n${rank(shops, 5)}` },
+      { type: 'mrkdwn', text: `*인기 검색어*\n${rank(countBy(byType('search'), (r) => String(r.target ?? '').toLowerCase()), 5)}` },
+    ] },
+    section(`*인스타 이동이 많은 글*\n${postLines}`),
+    { type: 'section', fields: [
+      { type: 'mrkdwn', text: `*많이 본 탭*\n${rank(countBy(byType('tab'), (r) => (r.target === 'map' ? '지도' : r.target)), 5)}` },
+      { type: 'mrkdwn', text: `*기능 사용*\n${rank(countBy(rows.filter((r) => r.type !== 'visit'), (r) => FEATURE_LABELS[r.type] ?? r.type), 5)}` },
+    ] },
+    context(`\`통계 오늘\` · \`통계 7일\` · \`통계 30일\` · \`통계 90일\`  ·  <${SITE}/admin?tab=stats|관리자 화면에서 자세히>`),
+  )
+  return msg(`사용 통계 ${label}`, blocks)
+}
 
 // ---------- 목록 ----------
 async function listRequests(db) {
@@ -164,9 +361,12 @@ function footer(total, tab, note = '') {
 export async function answer(text, db) {
   const t = text.replace(/<@[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   try {
-    if (/^(신청|매장)/.test(t)) return await listRequests(db)
+    if (/^(신청|매장\s*신청)/.test(t)) return await listRequests(db)
     if (/^의견/.test(t)) return await listFeedback(db, /전체|모두/.test(t))
     if (/^(기타|검토)/.test(t)) return await listReview(db)
+    if (/^매장/.test(t)) return await viewShops(db)
+    if (/^(수집|상태)/.test(t)) return await viewStatus(db)
+    if (/^통계/.test(t)) return await viewStats(db, t)
   } catch (err) {
     return msg(`⚠️ 읽지 못했습니다: ${esc(err.message)}`)
   }

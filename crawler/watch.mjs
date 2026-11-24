@@ -18,6 +18,7 @@ import { addShop } from './add-shop.mjs'
 import { reviewRequest, autoAddedToday, AUTO_ADD_PER_DAY } from './review-request.mjs'
 import { openNaverBrowser } from './naver.mjs'
 import { log } from './log.mjs'
+import { NETWORK_ERR, retryNetwork, shortError } from './retry.mjs'
 import { cleanupRecords, deleteExpiredPosts, hasNoCaption, loadDeletedCodes, summarize } from './cleanup.mjs'
 
 const ACTIVE_HOURS = [9, 24] // 한국 시각
@@ -78,11 +79,12 @@ try {
       const naver = await openNaverBrowser()
       let r
       try {
-        r = await reviewRequest(context, naver.context, req, {
+        const opts = {
           registered: new Set(config.accounts.map((a) => a.username)),
           canAutoAdd: (await autoAddedToday()) < AUTO_ADD_PER_DAY,
           knownBranches: config.accounts.flatMap((a) => a.branches),
-        })
+        }
+        r = await retryNetwork(`매장 신청 검토 @${req.username}`, () => reviewRequest(context, naver.context, req, opts))
       } finally {
         await naver.browser.close()
       }
@@ -99,8 +101,11 @@ try {
       await log(`🔎 매장 신청 @${req.username} ${label}: ${r.note}`, { account: req.username })
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err
-      await db.from('shop_requests').update({ auto_checked_at: stamp, auto_note: `자동 검토 실패: ${err.message}`.slice(0, 500) }).eq('id', req.id)
-      await log(`✗ 매장 신청 자동 검토 실패 @${req.username}: ${err.message}`, { level: 'error', account: req.username })
+      // 인터넷 문제면 검토한 것으로 치지 않고 다음 실행 때 다시 검토
+      if (!NETWORK_ERR.test(String(err?.message))) {
+        await db.from('shop_requests').update({ auto_checked_at: stamp, auto_note: `자동 검토 실패: ${shortError(err)}`.slice(0, 500) }).eq('id', req.id)
+      }
+      await log(`✗ 매장 신청 자동 검토 실패 @${req.username}: ${shortError(err)}`, { level: 'error', account: req.username })
     }
     await pause()
   }
@@ -110,10 +115,12 @@ try {
   for (const req of approved ?? []) {
     try {
       if (config.accounts.some((a) => a.username === req.username)) throw new Error('이미 등록된 매장입니다.')
-      const r = await addShop(
-        context,
-        { username: req.username, displayName: req.display_name, region: req.region, accountType: req.account_type, naverPlaceId: req.naver_place_id },
-        config.works,
+      const r = await retryNetwork(`매장 추가 @${req.username}`, () =>
+        addShop(
+          context,
+          { username: req.username, displayName: req.display_name, region: req.region, accountType: req.account_type, naverPlaceId: req.naver_place_id },
+          config.works,
+        ),
       )
       const msg = `${r.account.displayName} 추가 완료: 글 ${r.total}개, 사진 ${r.imagesUploaded}장${r.followed === 'failed' ? ' (⚠ 팔로우 실패: 부계정으로 직접 팔로우 필요)' : ''}`
       await db.from('shop_requests').update({ status: 'done', result: msg }).eq('id', req.id)
@@ -121,15 +128,18 @@ try {
       alerts.added.push(r.account.displayName)
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err
-      await db.from('shop_requests').update({ status: 'failed', result: err.message }).eq('id', req.id)
-      await log(`✗ 매장 추가 실패 @${req.username}: ${err.message}`, { level: 'error', account: req.username })
-      alerts.errors.push(`매장 추가 실패 @${req.username}`)
+      // 인터넷 문제면 승인 상태 그대로 두고 다음 실행 때 다시 추가
+      if (!NETWORK_ERR.test(String(err?.message))) {
+        await db.from('shop_requests').update({ status: 'failed', result: shortError(err) }).eq('id', req.id)
+      }
+      await log(`✗ 매장 추가 실패 @${req.username}: ${shortError(err)}`, { level: 'error', account: req.username })
+      alerts.errors.push(`매장 추가 실패 @${req.username}: ${shortError(err)}`)
     }
     await pause()
   }
 
   // 2) 팔로잉 피드
-  const feed = await fetchFollowingFeed(context, known)
+  const feed = await retryNetwork('피드 확인', () => fetchFollowingFeed(context, known))
   // 본문 없는 글은 새 글로 치지 않음 (수집하지 않으므로 매장 페이지를 열 필요 없음)
   const fresh = feed.filter((p) => byUsername.has(p.owner) && !known.has(p.code) && !hasNoCaption(p))
   const targets = [...new Set(fresh.map((p) => p.owner))]
@@ -150,7 +160,7 @@ try {
     const account = byUsername.get(username)
     await pause()
     try {
-      const posts = await fetchAccount(context, username)
+      const posts = await retryNetwork(account.displayName, () => fetchAccount(context, username))
       const r = await savePosts(account, posts, config.works)
       await saveProfile(username, posts.profile).catch(() => {}) // 프로필 저장 실패는 수집을 멈추지 않음
       await markCrawled(username)
@@ -159,15 +169,15 @@ try {
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err
       failed++
-      await log(`✗ ${account.displayName}: ${err.message}`, { level: 'error', account: username })
-      alerts.errors.push(`${account.displayName}: ${err.message}`)
+      await log(`✗ ${account.displayName}: ${shortError(err)}`, { level: 'error', account: username })
+      alerts.errors.push(`${account.displayName}: ${shortError(err)}`)
     }
   }
 } catch (err) {
   failed++
-  await log(`✗ ${err.message}`, { level: 'error' })
+  await log(`✗ ${shortError(err)}`, { level: 'error' })
   if (err instanceof LoginRequiredError) alerts.loginRequired = true
-  else alerts.errors.push(err.message)
+  else alerts.errors.push(shortError(err))
 } finally {
   await context.close()
 }
