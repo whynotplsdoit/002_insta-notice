@@ -471,15 +471,38 @@
   white-space: pre-line;
   color: var(--text);
 }
-.btn.post-insta {
+.post-actions {
   display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+/* 두 버튼 같은 모양: 매장 정보 = 네이비, 인스타그램 = 핑크 (둘 다 꽉 찬 버튼) */
+.post-actions .btn {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  color: #fff;
+  font-weight: 700;
+  display: inline-flex;
+  box-shadow: 0 2px 6px rgba(32, 32, 62, 0.18);
   align-items: center;
   justify-content: center;
   height: 46px;
-  margin-top: 4px;
   border-radius: 12px;
   font-size: 15px;
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.post-actions .btn-navy {
+  background: var(--brand-navy);
+}
+@media (prefers-color-scheme: dark) {
+  /* 어두운 화면에서는 배경과 구분되게 한 톤 밝은 네이비 */
+  .post-actions .btn-navy {
+    background: #3a3a6e;
+  }
 }
 
 /* ---------- 매장 정보 창 ---------- */
@@ -726,10 +749,6 @@
 .hours li.today span:first-child {
   color: var(--accent);
 }
-.shop-only {
-  width: 100%;
-  height: 44px;
-}
 
 /* 휴대폰: 아래에서 올라오는 판 */
 @media (max-width: 599px) {
@@ -861,13 +880,38 @@
 }
 
 /* 휴대폰 필터 창은 밝은 판으로 */
+.filters-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19; /* 머리글(20) 바로 아래: 목록을 누르면 필터만 닫힘 */
+  background: rgba(10, 10, 30, 0.6); /* 다른 창(.modal::backdrop)과 같은 어둡기 */
+  touch-action: none;
+  animation: fade-in 0.15s ease-out;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (min-width: 1024px) {
+  .filters-backdrop {
+    display: none;
+  }
+}
+/* 필터 창: 머리글 바로 아래에 떠서 목록 위를 덮음 (목록이 밀리지 않음) */
 .mobile-filters {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   max-width: 1280px;
   margin: 0 auto;
   padding: 12px 16px 14px;
   background: var(--surface);
   color: var(--text);
   border-top: 1px solid var(--header-line);
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
   max-height: 65vh;
   overflow-y: auto;
   overscroll-behavior: contain;

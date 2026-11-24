@@ -88,15 +88,21 @@ export default function PostDetail({ post, shop, showBranch, now, onShopOpen, on
 
           {body && <p className="post-text">{body}</p>}
 
-          <a
-            className="btn btn-primary post-insta"
-            href={post.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => track('insta_click', post.code, { shop: post.account_username, from: 'detail' })}
-          >
-            인스타그램에서 보기 ↗
-          </a>
+          {/* 아래 버튼 한 줄: 매장 정보(영업시간·주소·길찾기) · 인스타그램 */}
+          <div className="post-actions">
+            <button type="button" className="btn btn-navy" onClick={onShopOpen}>
+              매장 정보
+            </button>
+            <a
+              className="btn btn-primary"
+              href={post.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('insta_click', post.code, { shop: post.account_username, from: 'detail' })}
+            >
+              인스타그램에서 보기
+            </a>
+          </div>
         </div>
       </div>
     </dialog>

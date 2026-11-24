@@ -16,7 +16,7 @@ function mapUrl(branch, shopName) {
   return `https://map.naver.com/p/search/${encodeURIComponent(q)}`
 }
 
-export default function ShopInfo({ account, branches, posts, focusBranches = [], now, onShowOnly, onClose }) {
+export default function ShopInfo({ account, branches, posts, focusBranches = [], now, onClose }) {
   const dialogRef = useRef(null)
   useScrollLock() // 창이 열려 있는 동안 뒤 목록은 스크롤되지 않게
   useBackToClose(onClose) // 휴대폰 뒤로 가기로 닫기
@@ -116,10 +116,6 @@ export default function ShopInfo({ account, branches, posts, focusBranches = [],
             />
           ))}
         </section>
-
-        <button type="button" className="btn btn-primary shop-only" onClick={onShowOnly}>
-          이 매장 소식만 보기 ({stats.count})
-        </button>
       </div>
     </dialog>
   )

@@ -62,6 +62,30 @@ function Feed() {
   const [query, setQuery] = useState('')
   const [hidePast, setHidePast] = useState(saved.hidePast ?? false)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const filtersRef = useRef(null)
+  const filterBtnRef = useRef(null)
+  // 필터 창 밖(머리글의 탭·검색창 등)을 누르면 필터 닫기
+  useEffect(() => {
+    if (!filtersOpen) return
+    const onDown = (e) => {
+      if (filtersRef.current?.contains(e.target) || filterBtnRef.current?.contains(e.target)) return
+      setFiltersOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    // 필터가 열려 있는 동안 뒤 목록 스크롤 막기
+    // (body 를 고정하면 머리글이 같이 밀려 올라가서, 페이지 스크롤만 멈춤)
+    const html = document.documentElement
+    html.style.overflow = 'hidden'
+    const blockTouch = (e) => {
+      if (!filtersRef.current?.contains(e.target)) e.preventDefault()
+    }
+    document.addEventListener('touchmove', blockTouch, { passive: false })
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('touchmove', blockTouch)
+      html.style.overflow = ''
+    }
+  }, [filtersOpen])
   const [requestOpen, setRequestOpen] = useState(false)
   const [shopInfo, setShopInfo] = useState(null) // { username, branches: 글에 적힌 지점 }
   const [detail, setDetail] = useState(null) // 상세 창에 연 글
@@ -365,6 +389,7 @@ function Feed() {
           <div className="header-tools">
             <button
               type="button"
+              ref={filterBtnRef}
               className={`filter-toggle${filtersOpen ? ' open' : ''}`}
               onClick={() => setFiltersOpen((v) => !v)}
               aria-expanded={filtersOpen}
@@ -401,8 +426,14 @@ function Feed() {
             </button>
           ))}
         </nav>
-        {filtersOpen && <div className="mobile-filters">{filters}</div>}
+        {filtersOpen && (
+          <div className="mobile-filters" ref={filtersRef}>
+            {filters}
+          </div>
+        )}
       </header>
+      {/* 필터가 열려 있을 때 목록을 누르면 필터만 닫힘 (글이 열리지 않게 막음) */}
+      {filtersOpen && <div className="filters-backdrop" onClick={() => setFiltersOpen(false)} aria-hidden="true" />}
 
       {pending.length > 0 && (
         <button type="button" className="new-pill" onClick={onShowPending}>
@@ -582,7 +613,7 @@ function Feed() {
         </button>
       )}
 
-      {!isMap && <InstallPrompt />}
+      {!isMap && !filtersOpen && <InstallPrompt />}
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
       {detail && (
@@ -608,15 +639,6 @@ function Feed() {
           focusBranches={shopInfo.branches}
           now={now}
           onClose={() => setShopInfo(null)}
-          onShowOnly={() => {
-            track('shop_only', shopInfo.username)
-            setShops([shopInfo.username])
-            setTab('전체')
-            setShopInfo(null)
-            setDetail(null)
-            // 창이 닫히며 스크롤 잠금이 풀린 뒤에 맨 위로
-            setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
-          }}
         />
       )}
     </div>
