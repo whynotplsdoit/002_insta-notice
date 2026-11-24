@@ -1,10 +1,12 @@
 // 카카오톡 "나에게 보내기" 알림
 // - 처음 한 번: npm run kakao:login → 브라우저에서 카카오 로그인·허락 → 토큰 저장
-// - 토큰은 OneDrive 밖(%LOCALAPPDATA%\insta-notice\kakao-token.json)에 저장 (GitHub·클라우드에 올라가지 않음)
+// - 토큰은 Supabase DB(kakao_tokens 표, 관리자·서버만 접근)에 저장 → PC가 꺼져 있어도 Supabase 감시가 같은 토큰으로 카톡을 보냄
+//   (표가 아직 없으면 예전처럼 %LOCALAPPDATA%\insta-notice\kakao-token.json 사용, 표가 생기면 자동으로 옮김)
 // - 접근 토큰은 몇 시간마다 만료되지만 저장된 갱신 토큰으로 자동 연장. 갱신 토큰은 약 2달 유효하고 쓰는 동안 자동 연장됨
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { PROFILE_DIR } from './profile.mjs'
+import { db } from './db.mjs'
 
 export const REDIRECT_URI = 'http://localhost:5179/kakao'
 const TOKEN_FILE = path.join(path.dirname(PROFILE_DIR), 'kakao-token.json')
@@ -45,17 +47,50 @@ async function saveToken(t, prev = {}) {
     refresh_token: t.refresh_token ?? prev.refresh_token,
     refresh_expires_at: t.refresh_token_expires_in ? now + t.refresh_token_expires_in * 1000 : prev.refresh_expires_at,
   }
-  await fs.mkdir(path.dirname(TOKEN_FILE), { recursive: true })
-  await fs.writeFile(TOKEN_FILE, JSON.stringify(data, null, 2), 'utf8')
+  await writeToken(data)
   return data
 }
 
-async function loadToken() {
+// 저장: DB가 우선, 표가 없으면 파일
+const iso = (ms) => (ms ? new Date(ms).toISOString() : null)
+const ms = (v) => (v ? new Date(v).getTime() : null)
+async function writeToken(data) {
+  const { error } = await db.from('kakao_tokens').upsert({
+    id: 1,
+    access_token: data.access_token,
+    access_expires_at: iso(data.access_expires_at),
+    refresh_token: data.refresh_token,
+    refresh_expires_at: iso(data.refresh_expires_at),
+    updated_at: new Date().toISOString(),
+  })
+  if (!error) return
+  await fs.mkdir(path.dirname(TOKEN_FILE), { recursive: true })
+  await fs.writeFile(TOKEN_FILE, JSON.stringify(data, null, 2), 'utf8')
+}
+
+async function readFileToken() {
   try {
     return JSON.parse(await fs.readFile(TOKEN_FILE, 'utf8'))
   } catch {
     return null
   }
+}
+
+async function loadToken() {
+  const { data, error } = await db.from('kakao_tokens').select('*').eq('id', 1).maybeSingle()
+  if (error) return readFileToken() // 표가 아직 없음
+  if (data?.refresh_token) {
+    return {
+      access_token: data.access_token,
+      access_expires_at: ms(data.access_expires_at),
+      refresh_token: data.refresh_token,
+      refresh_expires_at: ms(data.refresh_expires_at),
+    }
+  }
+  // 표는 생겼는데 비어 있으면 파일에 있던 토큰을 옮김
+  const file = await readFileToken()
+  if (file?.refresh_token) await writeToken(file)
+  return file
 }
 
 // 로그인 후 받은 코드로 토큰 발급
