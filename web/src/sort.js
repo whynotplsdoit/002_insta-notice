@@ -55,10 +55,6 @@ export function scheduleLabel(post, now = Date.now()) {
   if (!post.starts_at) return null
   const { start, end, group } = scheduleOf(post, now)
   const today = dayStart(now)
-  const md = (ms) => {
-    const d = new Date(ms + KST)
-    return `${d.getUTCMonth() + 1}.${d.getUTCDate()}`
-  }
   if (group === 'upcoming') {
     const days = Math.round((start - today) / DAY)
     return { kind: 'upcoming', text: days === 1 ? '내일 시작' : `D-${days}` }
@@ -66,7 +62,7 @@ export function scheduleLabel(post, now = Date.now()) {
   if (group === 'today') {
     const left = Math.round((dayStart(end) - today) / DAY)
     if (left === 0) return { kind: 'today', text: post.ends_at ? '오늘 마감' : '오늘' }
-    return { kind: 'today', text: `진행 중 · ${md(end)}까지` }
+    return { kind: 'today', text: '진행 중' } // 언제까지인지는 바로 옆 날짜에 나옴
   }
   return { kind: 'past', text: '종료' }
 }
