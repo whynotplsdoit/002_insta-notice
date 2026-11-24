@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { configured } from './supabase.js'
 import { usePosts } from './usePosts.js'
@@ -22,6 +22,8 @@ const TABS = [
 ]
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
 const STORAGE_KEY = 'goods-feed:filters:v2'
+const CONTACT_EMAIL = 'whynot.plsdoit@gmail.com' // 게시 중단 요청 받는 메일
+const PAGE_SIZE = 30 // 한 번에 보여줄 글 수
 const NEW_MS = 24 * 3600_000 // 24시간 안에 처음 수집된 글은 "NEW"
 
 // 탭·필터는 이 브라우저에만 기억 (저장이 막혀 있어도 정상 동작)
@@ -137,6 +139,51 @@ function Feed() {
     () => (sortMode === 'posted' ? sortByPosted(visible) : sortBySchedule(visible, now)),
     [visible, sortMode, now],
   )
+
+  // 구역별 개수 (오늘·진행 중 / 앞으로 예정 / 지난 소식)
+  const groupCount = useMemo(() => {
+    const c = { today: 0, upcoming: 0, past: 0 }
+    for (const x of sorted) if (x.group) c[x.group]++
+    return c
+  }, [sorted])
+
+  // 지난 소식은 처음에 접어 둠 (일정순일 때만)
+  const [pastOpen, setPastOpen] = useState(false)
+  const pastHidden = sortMode === 'schedule' && !pastOpen && groupCount.past > 0
+  const list = useMemo(() => (pastHidden ? sorted.filter((x) => x.group !== 'past') : sorted), [sorted, pastHidden])
+
+  // 30개씩 보여주기: 조건이 바뀌면 처음 30개부터
+  const [shown, setShown] = useState(PAGE_SIZE)
+  useEffect(() => {
+    setShown(PAGE_SIZE)
+  }, [tab, types, regions, shops, query, hidePast, sortMode])
+  const page = list.slice(0, shown)
+
+  // 목록 끝(더 보기 자리)이 화면에 가까워지면 자동으로 다음 30개
+  const moreRef = useRef(null)
+  useEffect(() => {
+    const el = moreRef.current
+    if (!el || !('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && setShown((n) => n + PAGE_SIZE), {
+      rootMargin: '600px 0px',
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [shown, list.length])
+
+  // 지난 소식을 펼치면 펼친 자리부터 30개 더
+  useEffect(() => {
+    if (pastOpen) setShown((n) => Math.max(n, list.length - groupCount.past + PAGE_SIZE))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pastOpen])
+
+  // 맨 위로 버튼: 한 화면 반 이상 내려가면 보임
+  const [showTop, setShowTop] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > window.innerHeight * 1.5)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const counts = useMemo(() => {
     const c = { 전체: posts.length }
@@ -402,12 +449,17 @@ function Feed() {
           )}
           {status === 'ready' && visible.length > 0 && (
             <div className="grid">
-              {sorted.map(({ post: p, group }, i) => (
+              {page.map(({ post: p, group }, i) => (
                 <Fragment key={p.code}>
-                  {group && group !== sorted[i - 1]?.group && (
+                  {group && group !== page[i - 1]?.group && (
                     <h2 className={`section-title section-${group}`}>
                       {GROUPS[group]}
-                      <span className="count">{sorted.filter((x) => x.group === group).length}</span>
+                      <span className="count">{groupCount[group]}</span>
+                      {group === 'past' && (
+                        <button type="button" className="section-toggle" onClick={() => setPastOpen(false)}>
+                          접기
+                        </button>
+                      )}
                     </h2>
                   )}
                   <PostCard
@@ -425,11 +477,44 @@ function Feed() {
               ))}
             </div>
           )}
-          <p className="footnote">
-            인스타그램 공개 게시물을 모아 보여줍니다. 정확한 내용은 각 매장 게시물을 확인하세요.
-            <br />
-            서비스 개선을 위해 개인을 알아볼 수 없는 방문·이용 통계를 수집합니다.
-          </p>
+
+          {/* 30개씩: 목록 끝에 닿으면 자동으로 다음 30개 (안 되면 버튼으로) */}
+          {status === 'ready' && shown < list.length && (
+            <div ref={moreRef} className="load-more">
+              <button type="button" className="btn" onClick={() => setShown((n) => n + PAGE_SIZE)}>
+                더 보기 ({list.length - shown}개 남음)
+              </button>
+            </div>
+          )}
+
+          {/* 지난 소식: 처음에는 접어 두고, 위 목록을 다 본 뒤에 펼치기 버튼 */}
+          {status === 'ready' && pastHidden && shown >= list.length && (
+            <button type="button" className="past-fold" onClick={() => setPastOpen(true)}>
+              <span>
+                {GROUPS.past} <span className="count">{groupCount.past}</span>
+              </span>
+              <span className="past-fold-action">
+                펼치기
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </button>
+          )}
+
+          <footer className="site-footer">
+            <p>
+              <b>출처</b> · 굿즈레이더는 각 매장 인스타그램의 공개 게시물을 모아 보여줍니다. 게시물의 글과 사진에 대한 권리는
+              해당 매장에 있으며, 각 소식의 <b>인스타그램</b> 버튼으로 원문을 확인할 수 있습니다. 정확한 내용은 매장 게시물을 확인해
+              주세요.
+            </p>
+            <p>
+              <b>게시 중단 요청</b> · 매장 운영자분께서 게시물 노출을 원하지 않으시면 매장 인스타그램 아이디와 함께{' '}
+              <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('[굿즈레이더] 게시 중단 요청')}`}>{CONTACT_EMAIL}</a>
+              로 메일을 보내 주세요. 확인 후 해당 매장의 게시물을 내리겠습니다.
+            </p>
+            <p className="muted-line">서비스 개선을 위해 개인을 알아볼 수 없는 방문·이용 통계를 수집합니다.</p>
+          </footer>
         </main>
       </div>
 
@@ -449,6 +534,19 @@ function Feed() {
           </button>
         ))}
       </nav>
+
+      {showTop && (
+        <button
+          type="button"
+          className="to-top"
+          aria-label="맨 위로"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
+      )}
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
       {shopInfo && shopOf.get(shopInfo.username) && (

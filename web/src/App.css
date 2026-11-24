@@ -3,7 +3,7 @@
 .toolbar,
 .section-title,
 .state,
-.footnote {
+.site-footer {
   --text: #ececf6;
   --muted: #a9aac8;
   --line: #3a3a62;
@@ -1089,11 +1089,105 @@
   background: var(--surface);
   font-weight: 600;
 }
-.footnote {
-  margin: 32px 0 0;
-  font-size: 12px;
+/* ---------- 더 보기, 지난 소식 접기, 맨 위로 ---------- */
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0 4px;
+}
+.load-more .btn {
+  border-color: var(--header-line);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ececf6;
+}
+.past-fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--header-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ececf6;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: left;
+}
+.past-fold .count {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #a9aac8;
+}
+.past-fold-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a9aac8;
+}
+.section-toggle {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
   color: var(--muted);
-  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+.to-top {
+  position: fixed;
+  right: 16px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid var(--brand-pink);
+  border-radius: 50%;
+  background: var(--brand-navy);
+  color: var(--brand-pink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+@media (max-width: 599px) {
+  /* 휴대폰: 아래 탭 위로 */
+  .to-top {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
+
+/* 사이트 하단: 출처, 게시 중단 요청, 통계 수집 안내 */
+.site-footer {
+  margin: 40px 0 0;
+  padding: 18px 4px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.site-footer p {
+  margin: 0 0 8px;
+}
+.site-footer b {
+  color: var(--text);
+  font-weight: 700;
+}
+.site-footer a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap; /* 메일 주소가 중간에 끊기지 않게 */
+}
+.site-footer a:hover {
+  text-decoration: underline;
+}
+.site-footer .muted-line {
+  opacity: 0.8;
 }
 
 
