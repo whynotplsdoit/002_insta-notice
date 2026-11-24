@@ -373,9 +373,10 @@
 
 /* 휴대폰: 아래에서 올라오는 판 */
 @media (max-width: 599px) {
+  /* 100vw는 스크롤바 폭까지 포함해서 화면 밖으로 넘침 → 100% (스크롤바 제외 화면 폭) */
   .shop-modal {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     max-height: 88vh;
     margin: auto 0 0;
     border-radius: 18px 18px 0 0;
@@ -935,6 +936,10 @@
 .result-count {
   font-size: 13px;
   color: var(--muted);
+}
+.result-count b {
+  color: var(--text);
+  font-weight: 700;
 }
 .segmented {
   display: inline-flex;

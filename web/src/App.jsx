@@ -340,7 +340,16 @@ function Feed() {
           )}
           {status === 'ready' && (
             <div className="toolbar">
-              <span className="result-count">{visible.length}개</span>
+              {/* 필터로 일부만 보일 때는 "보이는 글 / 이 탭 전체 글" */}
+              <span className="result-count">
+                {visible.length === (counts[tab] ?? 0) ? (
+                  `${visible.length}개`
+                ) : (
+                  <>
+                    <b>{visible.length}</b> / {counts[tab] ?? 0}개
+                  </>
+                )}
+              </span>
               <div className="segmented" role="group" aria-label="정렬">
                 {SORTS.map((s) => (
                   <button
