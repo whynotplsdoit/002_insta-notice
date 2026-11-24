@@ -5,6 +5,7 @@ import { usePosts } from './usePosts.js'
 import PostCard from './PostCard.jsx'
 import RequestShop from './RequestShop.jsx'
 import ShopInfo from './ShopInfo.jsx'
+import { track } from './track.js'
 import { BoxIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
@@ -73,6 +74,14 @@ function Feed() {
       // 저장 못 해도 괜찮음
     }
   }, [tab, types, regions, shops, hidePast, sortMode])
+
+  // 검색어 기록: 입력을 멈추고 1.5초 지나면 한 번 (2글자 이상)
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) return
+    const t = setTimeout(() => track('search', q), 1500)
+    return () => clearTimeout(t)
+  }, [query])
 
   const shopOf = useMemo(() => new Map(accounts.map((a) => [a.username, a])), [accounts])
   const branchCount = useMemo(() => {
@@ -143,8 +152,10 @@ function Feed() {
   const toggleShop = (username) => {
     const all = sortedShops.map((a) => a.username)
     const current = shops ?? all
-    const next = current.includes(username) ? current.filter((u) => u !== username) : [...current, username]
+    const on = !current.includes(username)
+    const next = on ? [...current, username] : current.filter((u) => u !== username)
     setShops(next.length === all.length ? null : next)
+    track('filter', 'shop', { value: username, on })
   }
 
   const resetFilters = () => {
@@ -157,10 +168,12 @@ function Feed() {
 
   const selectTab = (id) => {
     setTab(id)
+    track('tab', id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const onShowPending = () => {
+    track('new_posts', null, { count: pending.length })
     showPending()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -177,7 +190,10 @@ function Feed() {
                 type="button"
                 className={`chip${types.includes(t) ? ' on' : ''}`}
                 aria-pressed={types.includes(t)}
-                onClick={() => toggle(types, setTypes, t)}
+                onClick={() => {
+                  toggle(types, setTypes, t)
+                  track('filter', 'type', { value: t, on: !types.includes(t) })
+                }}
               >
                 {t}
               </button>
@@ -194,7 +210,10 @@ function Feed() {
               type="button"
               className={`chip${regions.includes(r) ? ' on' : ''}`}
               aria-pressed={regions.includes(r)}
-              onClick={() => toggle(regions, setRegions, r)}
+              onClick={() => {
+                toggle(regions, setRegions, r)
+                track('filter', 'region', { value: r, on: !regions.includes(r) })
+              }}
             >
               {r}
             </button>
@@ -215,7 +234,10 @@ function Feed() {
                 type="checkbox"
                 checked={shops === null}
                 ref={(el) => el && (el.indeterminate = shops !== null && shops.length > 0)}
-                onChange={() => setShops(shops === null ? [] : null)}
+                onChange={() => {
+                  setShops(shops === null ? [] : null)
+                  track('filter', 'shop', { value: 'all', on: shops !== null })
+                }}
               />
               <span className="shop-info">
                 <span className="shop-name">전체 매장</span>
@@ -239,13 +261,23 @@ function Feed() {
             )
           })}
         </ul>
-        <button type="button" className="add-shop" onClick={() => setRequestOpen(true)}>
+        <button
+          type="button"
+          className="add-shop"
+          onClick={() => {
+            setRequestOpen(true)
+            track('request_open')
+          }}
+        >
           + 매장 추가 신청
         </button>
       </fieldset>
       {(
         <label className="check">
-          <input type="checkbox" checked={hidePast} onChange={(e) => setHidePast(e.target.checked)} />
+          <input type="checkbox" checked={hidePast} onChange={(e) => {
+            setHidePast(e.target.checked)
+            track('filter', 'hide_past', { on: e.target.checked })
+          }} />
           끝난 행사 숨기기
         </label>
       )}
@@ -357,7 +389,10 @@ function Feed() {
                     type="button"
                     className={sortMode === s.id ? 'on' : ''}
                     aria-pressed={sortMode === s.id}
-                    onClick={() => setSortMode(s.id)}
+                    onClick={() => {
+                      setSortMode(s.id)
+                      track('sort', s.id)
+                    }}
                   >
                     {s.label}
                   </button>
@@ -381,7 +416,10 @@ function Feed() {
                     shopName={shopOf.get(p.account_username)?.display_name ?? p.account_username}
                     showBranch={(branchCount.get(p.account_username) ?? 0) > 1}
                     isNew={now - new Date(p.first_seen_at).getTime() < NEW_MS && now - new Date(p.posted_at).getTime() < NEW_MS}
-                    onShopClick={() => setShopInfo({ username: p.account_username, branches: p.branches })}
+                    onShopClick={() => {
+                      setShopInfo({ username: p.account_username, branches: p.branches })
+                      track('shop_open', p.account_username, { from: 'card' })
+                    }}
                   />
                 </Fragment>
               ))}
@@ -389,6 +427,8 @@ function Feed() {
           )}
           <p className="footnote">
             인스타그램 공개 게시물을 모아 보여줍니다. 정확한 내용은 각 매장 게시물을 확인하세요.
+            <br />
+            서비스 개선을 위해 개인을 알아볼 수 없는 방문·이용 통계를 수집합니다.
           </p>
         </main>
       </div>
@@ -420,6 +460,7 @@ function Feed() {
           now={now}
           onClose={() => setShopInfo(null)}
           onShowOnly={() => {
+            track('shop_only', shopInfo.username)
             setShops([shopInfo.username])
             setTab('전체')
             setShopInfo(null)

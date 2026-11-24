@@ -14,5 +14,10 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- 방문 통계 (Vercel Web Analytics, 쿠키 없음). Vercel 프로젝트에서 Analytics 를 켜야 동작 -->
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments) }
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

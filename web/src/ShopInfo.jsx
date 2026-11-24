@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { imageUrl } from './supabase.js'
 import { hoursLines, openStatus, todayName } from './hours.js'
+import { track } from './track.js'
 
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
 
@@ -143,11 +144,21 @@ function BranchCard({ branch, shopName, multi, highlight, defaultOpen, now }) {
           {branch.directions && <p className="branch-dir">{branch.directions}</p>}
 
           <div className="branch-actions">
-            <a className="pill-btn naver" href={mapUrl(branch, shopName)} target="_blank" rel="noopener noreferrer">
+            <a
+              className="pill-btn naver"
+              href={mapUrl(branch, shopName)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('map_click', branch.account_username, { branch: branch.name })}
+            >
               네이버 지도
             </a>
             {branch.phone && (
-              <a className="pill-btn" href={`tel:${branch.phone.replace(/[^\d+]/g, '')}`}>
+              <a
+                className="pill-btn"
+                href={`tel:${branch.phone.replace(/[^\d+]/g, '')}`}
+                onClick={() => track('phone_click', branch.account_username, { branch: branch.name })}
+              >
                 📞 {branch.phone}
               </a>
             )}

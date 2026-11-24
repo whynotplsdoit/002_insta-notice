@@ -7,6 +7,7 @@ import Shops from './Shops.jsx'
 import Status from './Status.jsx'
 import Posts from './Posts.jsx'
 import Review from './Review.jsx'
+import Stats from './Stats.jsx'
 import './admin.css'
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'shops', label: '매장 관리' },
   { id: 'status', label: '수집 상태' },
   { id: 'posts', label: '글 분류' },
+  { id: 'stats', label: '통계' },
 ]
 
 export default function Admin() {
@@ -182,6 +184,7 @@ function Dashboard({ email }) {
       {tab === 'shops' && <Shops />}
       {tab === 'status' && <Status />}
       {tab === 'posts' && <Posts />}
+      {tab === 'stats' && <Stats />}
     </Shell>
   )
 }

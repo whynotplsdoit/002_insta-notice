@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { imageUrl } from './supabase.js'
 import { bodyOf, dateRange, timeAgo, titleOf } from './format.js'
 import { scheduleLabel } from './sort.js'
+import { track } from './track.js'
 
 const MAX_WORKS = 3
 
@@ -31,7 +32,14 @@ export default function PostCard({ post, now, shopName, showBranch, isNew, onSho
 
   return (
     <article className={`card${isNew ? ' card-new' : ''}`}>
-      <a className="card-media" href={post.url} target="_blank" rel="noopener noreferrer" aria-label="인스타그램에서 보기">
+      <a
+        className="card-media"
+        href={post.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="인스타그램에서 보기"
+        onClick={() => track('insta_click', post.code, { shop: post.account_username, from: 'image' })}
+      >
         {src && !imgFailed ? (
           <img src={src} alt="" loading="lazy" decoding="async" onError={() => setImgFailed(true)} />
         ) : (
@@ -94,14 +102,26 @@ export default function PostCard({ post, now, shopName, showBranch, isNew, onSho
         {/* 아래 액션 줄: 왼쪽 더보기/접기, 오른쪽 인스타그램 */}
         <div className="card-actions">
           {(clamped || open) && (
-            <button type="button" className="toggle-btn more-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+            <button type="button" className="toggle-btn more-btn"
+              onClick={() => {
+                if (!open) track('more', post.code, { shop: post.account_username })
+                setOpen((v) => !v)
+              }}
+              aria-expanded={open}
+            >
               <span>{open ? '접기' : '더보기'}</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points={open ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
               </svg>
             </button>
           )}
-          <a className="insta-pill-btn" href={post.url} target="_blank" rel="noopener noreferrer">
+          <a
+            className="insta-pill-btn"
+            href={post.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => track('insta_click', post.code, { shop: post.account_username, from: 'button' })}
+          >
             <span>인스타그램</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="7" y1="17" x2="17" y2="7" />

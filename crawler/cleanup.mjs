@@ -7,13 +7,14 @@
 //   → 둘 중 먼저 오는 날에 삭제. 영원히 남는 글은 없음.
 //
 // 지운 글의 코드는 deleted_posts 에 남겨, 다음 수집 때 다시 들어오지 않게 합니다.
-// 기록 정리: 수집 기록(crawl_logs)은 30일, 삭제 기록(deleted_posts)은 1년 지나면 지움.
+// 기록 정리: 수집 기록(crawl_logs) 30일, 삭제 기록(deleted_posts) 1년, 사용 행동 기록(events) 180일 지나면 지움.
 import { db } from './db.mjs'
 
 export const MAX_KEEP_MONTHS = 3 // 모든 글 최대 게시 기간
 export const EVENT_KEEP_DAYS = 7 // 종료일 이후 보관 기간
 export const LOG_KEEP_DAYS = 30 // 수집 기록
 export const DELETED_RECORD_KEEP_DAYS = 365 // 삭제 기록
+export const EVENT_LOG_KEEP_DAYS = 180 // 사용 행동 기록 (통계)
 
 const DAY = 86400000
 const KST = 9 * 3600000
@@ -47,7 +48,10 @@ export async function cleanupRecords(now = Date.now()) {
   const r = await db.from('deleted_posts').delete({ count: 'exact' }).lt('deleted_at', recBefore)
   if (l.error) throw new Error(`수집 기록 정리: ${l.error.message}`)
   if (r.error) throw new Error(`삭제 기록 정리: ${r.error.message}`)
-  return { logs: l.count ?? 0, records: r.count ?? 0 }
+  // 사용 행동 기록 (표가 아직 없으면 넘어감)
+  const evBefore = new Date(now - EVENT_LOG_KEEP_DAYS * DAY).toISOString()
+  const e = await db.from('events').delete({ count: 'exact' }).lt('created_at', evBefore)
+  return { logs: l.count ?? 0, records: r.count ?? 0, events: e.error ? 0 : e.count ?? 0 }
 }
 
 // 이미 지운 글 코드 목록 (크롤러가 다시 넣지 않도록)

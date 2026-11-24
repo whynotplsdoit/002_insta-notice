@@ -1,6 +1,7 @@
 // 매장 추가 신청 창
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
+import { track } from './track.js'
 
 // "https://www.instagram.com/shop_name/?hl=ko", "@shop_name", "shop_name" → "shop_name"
 export function parseUsername(input) {
@@ -46,6 +47,7 @@ export default function RequestShop({ accounts, onClose }) {
       return
     }
     setState('done')
+    track('request_submit', username)
   }
 
   return (
