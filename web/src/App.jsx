@@ -5,6 +5,7 @@ import { usePosts } from './usePosts.js'
 import PostCard from './PostCard.jsx'
 import RequestShop from './RequestShop.jsx'
 import ShopInfo from './ShopInfo.jsx'
+import InstallPrompt from './InstallPrompt.jsx'
 import { track } from './track.js'
 import { BoxIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
@@ -547,6 +548,8 @@ function Feed() {
           </svg>
         </button>
       )}
+
+      <InstallPrompt />
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
       {shopInfo && shopOf.get(shopInfo.username) && (

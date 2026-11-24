@@ -7,6 +7,11 @@ import App from './App.jsx'
 const Admin = lazy(() => import('./admin/Admin.jsx'))
 const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin'
 
+// 홈 화면 앱용 서비스 워커 (배포 사이트에서만, 개발 중에는 끔)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}))
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     {isAdmin ? (

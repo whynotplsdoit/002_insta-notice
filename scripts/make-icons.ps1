@@ -49,8 +49,28 @@ function RoundCorners($bmp) {
   return $res
 }
 
+# Maskable icon for Android home screen: logo at 80% on the brand navy (#20203E),
+# so circle/squircle masks never cut the logo.
+function Maskable($img, $n) {
+  $bmp = New-Object System.Drawing.Bitmap $n, $n
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.Clear([System.Drawing.Color]::FromArgb(255, 0x20, 0x20, 0x3E))
+  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+  $inner = [int]($n * 0.8)
+  $off = [int](($n - $inner) / 2)
+  $g.DrawImage($img, $off, $off, $inner, $inner)
+  $g.Dispose()
+  return $bmp
+}
+
 $img = [System.Drawing.Image]::FromFile($src)
 try {
+  $m = Maskable $img 512
+  $m.Save((Join-Path $out 'icon-maskable-512.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+  $m.Dispose()
+  Write-Output 'icon-maskable-512.png (512px, maskable)'
+
   foreach ($icon in $icons) {
     $bmp = Resize $img $icon.Size
     if ($icon.Round) {
