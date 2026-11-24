@@ -200,7 +200,27 @@ function findDates(body, postedAt) {
   return { startsAt: (near ?? dates[0]).date.toISOString(), endsAt: null }
 }
 
+// ---------- 기타 글 처리 ----------
+// 본문이 사실상 없음: 해시태그·반복 문구·멘션·링크·이모지를 빼면 글자가 거의 없음 (예: "🎁✨ #굿즈샵 #홍대")
+export function isEmptyBody(body) {
+  const text = withoutHashtags(body).replace(/@[\w.]+/g, ' ').replace(/https?:\/\/\S+/g, ' ')
+  const hangul = (text.match(/[가-힣]/g) ?? []).length
+  const latin = (text.match(/[A-Za-z0-9]/g) ?? []).length
+  return hangul < 2 && latin < 4
+}
+
+// 굿즈 관련 홍보 글: 상품·매장·작품 이야기가 있으면 '기타'로 바로 게시 (없으면 관리자 검토)
+const PROMO_WORDS = [
+  '굿즈', '키링', '아크릴', '포카', '포토카드', '뱃지', '캔뱃지', '인형', '누이', '스티커', '엽서', '피규어', '가챠', '쿠지',
+  '캐릭터', '애니', '신상', '상품', '판매', '구매', '재고', '매장', '방문', '오픈', '영업', '할인', '증정', '특전', '랜덤', '박스',
+]
+export function isGoodsPromo(body, caption, foundWorks) {
+  if (foundWorks.length) return true
+  return hasAny(withoutHashtags(body) + ' ' + hashtags(caption).join(' '), PROMO_WORDS)
+}
+
 // ---------- 전체 ----------
+// 기타 글에는 emptyBody(본문 없음 → 저장하지 않음), goodsPromo(굿즈 홍보 → 검토 없이 게시)를 함께 돌려줌
 export function classifyPosts(account, posts, works) {
   const boilerplate = findBoilerplate(posts)
   return posts.map((post) => {
@@ -218,6 +238,8 @@ export function classifyPosts(account, posts, works) {
       startsAt,
       endsAt,
       newTagCandidates,
+      emptyBody: category === '기타' && isEmptyBody(body),
+      goodsPromo: category === '기타' && isGoodsPromo(body, post.caption ?? '', foundWorks),
     }
   })
 }

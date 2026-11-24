@@ -104,7 +104,7 @@ export async function savePosts(account, posts, works) {
   await recordDeleted(empty.map((p) => ({ code: p.code, account_username: account.username })))
   for (const p of empty) deleted.add(p.code)
   // 분류(반복 문구 찾기)는 최근 글 전체로 하고, 저장은 지운 글·본문 없는 글을 빼고 함
-  const classified = classifyPosts(account, withCode, works).filter((p) => !deleted.has(p.code))
+  let classified = classifyPosts(account, withCode, works).filter((p) => !deleted.has(p.code))
 
   const { data: existing, error } = await db
     .from('posts')
@@ -112,6 +112,11 @@ export async function savePosts(account, posts, works) {
     .in('code', classified.map((p) => p.code))
   if (error) throw new Error(`기존 글 확인: ${error.message}`)
   const known = new Map(existing.map((e) => [e.code, e]))
+
+  // '기타' 새 글 중 본문이 사실상 없는 글(해시태그·이모지뿐)은 저장하지 않고 지운 글로 기록
+  const noBody = classified.filter((p) => p.emptyBody && !known.has(p.code))
+  await recordDeleted(noBody.map((p) => ({ code: p.code, account_username: account.username })))
+  classified = classified.filter((p) => !noBody.includes(p))
 
   let imagesUploaded = 0
   const newRows = [] // 처음 들어오는 글
@@ -145,8 +150,8 @@ export async function savePosts(account, posts, works) {
       ends_at: p.endsAt,
     }
     if (!known.has(p.code)) {
-      // '기타'로 분류된 새 글은 사이트("전체" 탭)에 보이면서 관리자 검토 대기
-      const review = p.category === '기타'
+      // '기타' 새 글: 굿즈 홍보면 그대로 게시, 아니면 사이트("전체" 탭)에 보이면서 관리자 검토 대기
+      const review = p.category === '기타' && !p.goodsPromo
       newRows.push({ ...auto, hidden: false, needs_review: review })
     } else if (known.get(p.code).manual) {
       manualRows.push(base)
