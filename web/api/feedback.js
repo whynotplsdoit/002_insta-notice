@@ -1,5 +1,6 @@
 // 의견 받기 + 자동 필터링 (Vercel 함수: POST /api/feedback)
-//   1) 규칙 검사 (무료, 즉시): 자음·모음만, 같은 글자 반복, 테스트 글자 → 스팸함
+//   1) 규칙 검사 (무료, 즉시): 자음·모음만, 같은 글자 반복, 기호만, 테스트 글자 → 저장하지 않고 버림
+//                              자음·모음이 절반 이상 → 스팸함
 //   2) AI 판정 (Claude Haiku 5.5): 욕설·비방만 있는 글, 광고·도배 → 스팸함 / 나머지는 태그 붙여 새 의견
 //   AI 가 실패하거나 늦으면 새 의견으로 저장 (의견이 사라지지 않게)
 //   스팸은 지우지 않고 status='spam' 으로 숨김 → 관리자 화면 "스팸함"에서 복원·삭제, 30일 뒤 크롤러가 자동 삭제
@@ -16,14 +17,20 @@ const BURST_LIMIT = 30 // 10분에 30건 넘게 몰리면 AI 를 부르지 않�
 const env = (k) => process.env[k] ?? ''
 
 // ---------- 1) 규칙 검사 ----------
-// 반환: 스팸 이유 (문자열) 또는 null (통과)
+// 반환: { drop: true, reason } 저장하지 않고 버림 (누가 봐도 의미 없음)
+//       { drop: false, reason } 스팸함으로 (거의 의미 없지만 혹시 몰라 남김)
+//       null 통과
 export function ruleCheck(message) {
   const t = String(message ?? '').trim()
   const core = t.replace(/[\s\p{P}\p{S}]/gu, '') // 공백·문장부호·기호·이모지 뺀 글자
-  if (core.length < 2) return '내용이 거의 없음'
-  if (/^[ㄱ-ㅎㅏ-ㅣ]+$/.test(core)) return '자음·모음만 있음'
-  if (new Set(core.toLowerCase()).size === 1) return '같은 글자 반복'
-  if (/^(test|테스트|테스팅|asdf|qwer|zxcv|1234|12345|ㅁㄴㅇㄹ|ㅇㅇ|ㅎㅇ)+$/i.test(core)) return '테스트성 글자'
+  const drop = (reason) => ({ drop: true, reason })
+  if (core.length < 2) return drop('내용이 거의 없음')
+  if (/^[ㄱ-ㅎㅏ-ㅣ]+$/.test(core)) return drop('자음·모음만 있음')
+  if (new Set(core.toLowerCase()).size === 1) return drop('같은 글자 반복')
+  if (/^(test|테스트|테스팅|asdf|qwer|zxcv|1234|12345|ㅁㄴㅇㄹ|ㅇㅇ|ㅎㅇ)+$/i.test(core)) return drop('테스트성 글자')
+  // "ㅁㅇ륜ㅇㄹ유" 처럼 자음·모음이 절반 이상 (ㅠㅠ·ㅋㅋ 가 조금 섞인 정상 문장은 통과)
+  const jamo = (core.match(/[ㄱ-ㅎㅏ-ㅣ]/g) ?? []).length
+  if (jamo / core.length >= 0.5) return { drop: false, reason: '자음·모음이 절반 이상' }
   return null
 }
 
@@ -115,8 +122,10 @@ export async function POST(request) {
 
   let verdict
   const rule = ruleCheck(message)
+  // 누가 봐도 의미 없는 글은 저장하지 않음 (보낸 사람에게는 똑같이 "보냈어요")
+  if (rule?.drop) return json({ ok: true })
   if (rule) {
-    verdict = { status: 'spam', tag: null, filter_note: `규칙: ${rule}` }
+    verdict = { status: 'spam', tag: null, filter_note: `규칙: ${rule.reason}` }
   } else {
     const { count: recent } = await db.from('feedback').select('id', { count: 'exact', head: true }).gte('created_at', ago(600_000))
     const ai = (recent ?? 0) >= BURST_LIMIT ? null : await aiCheck(kind, message)

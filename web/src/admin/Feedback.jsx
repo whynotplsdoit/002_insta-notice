@@ -117,6 +117,7 @@ export default function Feedback({ onChange }) {
           <summary className="a-h2">🗑 스팸함 {spam.length}개</summary>
           <p className="a-muted a-small-text">
             자동으로 걸러진 의견입니다 (자음·모음 남발, 욕설만, 광고). 잘못 걸러졌으면 [복원], 30일 지나면 자동 삭제됩니다.
+            (ㅋㅋㅋ·zzz 같은 단순 반복·자음만·테스트 글자는 저장하지 않고 바로 버립니다.)
           </p>
           {spam.map(card)}
         </details>
