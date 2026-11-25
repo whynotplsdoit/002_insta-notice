@@ -1,7 +1,8 @@
 // 슬랙 관리 봇: 채널에서 "@goods-radar 신청 / 의견 / 기타" 로 목록을 부르고, 버튼으로 바로 처리
+//   한눈에 보기: "@goods-radar" 또는 "@goods-radar 전체" (메뉴별 요약 + [보기] 버튼)
 //   조회만: "@goods-radar 매장 / 수집 / 통계 [오늘|7일|30일|90일]"
 //   매장 신청: [승인] [거절]   (승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집)
-//   의견:      [확인함] [삭제]
+//   의견:      [보관] [삭제]   ("의견 보관": 보관한 의견 [삭제], 삭제는 완전히 지움)
 //   기타 검토: [게시] [삭제]   (삭제는 글·사진을 지우고 다시 수집되지 않게 기록, 되돌릴 수 없음)
 //
 // 슬랙 앱 설정
@@ -75,9 +76,10 @@ const msg = (text, blocks) => ({ text, blocks })
 
 const HELP = [
   '*굿즈레이더 관리 봇* 사용법',
+  '• `@goods-radar` 또는 `@goods-radar 전체`: 모든 메뉴 한눈에 보기 (버튼으로 자세히)',
   '*처리*',
   '• `@goods-radar 신청`: 확인이 필요한 매장 신청 → [승인] [거절]',
-  '• `@goods-radar 의견`: 확인 안 한 새 의견 → [확인함] [삭제]  (`의견 전체`: 최근 의견)',
+  '• `@goods-radar 의견`: 새 의견 → [보관] [삭제]  (`의견 보관`: 보관한 의견 → [삭제])',
   '• `@goods-radar 기타`: 기타 검토 대기 글 → [게시] [삭제]',
   '*조회*',
   '• `@goods-radar 매장`: 매장 수·매장 목록',
@@ -96,6 +98,11 @@ const ago = (iso) => {
   if (m < 60) return `${m}분 전`
   if (m < 60 * 24) return `${Math.floor(m / 60)}시간 전`
   return `${Math.floor(m / 1440)}일 전`
+}
+// 자동 확인이 1시간 넘게 없으면 문제 (인스타 확인은 9~24시라 Supabase 감시처럼 10~24시에만 따짐)
+const isQuiet = (lastIso) => {
+  const h = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false })) % 24
+  return h >= 10 && (!lastIso || Date.now() - new Date(lastIso).getTime() > 60 * 60000)
 }
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0)
 const bar = (n, max) => '▇'.repeat(max ? Math.max(n ? 1 : 0, Math.round((n / max) * 10)) : 0)
@@ -158,7 +165,7 @@ async function viewStatus(db) {
   const loginBroken = loginError && (!lastRun || new Date(loginError.created_at) > new Date(lastRun.created_at))
   const shops = (a.data ?? []).filter((s) => !s.hidden)
   const stale = shops.filter((s) => !s.last_crawled_at || Date.now() - new Date(s.last_crawled_at).getTime() > STALE_HOURS * 3600000)
-  const quiet = lastRun && Date.now() - new Date(lastRun.created_at).getTime() > 60 * 60000
+  const quiet = isQuiet(lastRun?.created_at)
   const problems = logs.filter((x) => x.level !== 'info' && Date.now() - new Date(x.created_at).getTime() < DAY)
 
   const blocks = [section('📡 *수집 상태*')]
@@ -172,7 +179,7 @@ async function viewStatus(db) {
       { type: 'mrkdwn', text: `*최근 24시간 문제 기록*\n${problems.length ? `⚠️ ${problems.length}건` : '없음 ✅'}` },
     ],
   })
-  if (quiet) blocks.push(context('⚠️ 1시간 넘게 자동 확인 기록이 없습니다. 밤(0~9시)이 아니라면 PC가 꺼졌거나 작업 스케줄러가 멈췄을 수 있습니다.'))
+  if (quiet) blocks.push(context('⚠️ 1시간 넘게 자동 확인 기록이 없습니다. PC가 꺼졌거나 작업 스케줄러가 멈췄을 수 있습니다.'))
   const max = Math.max(...byCat)
   blocks.push(
     section(
@@ -302,20 +309,22 @@ async function listRequests(db) {
   return msg(`매장 신청 ${data.length}건`, blocks)
 }
 
-async function listFeedback(db, all) {
+// kept=false: 새 의견 [보관] [삭제] / kept=true: 보관한 의견 [삭제]
+async function listFeedback(db, kept) {
   let q = db.from('feedback').select('id, kind, message, context, ua, status, created_at').order('created_at', { ascending: false }).limit(30)
-  if (!all) q = q.eq('status', 'new')
+  q = kept ? q.neq('status', 'new') : q.eq('status', 'new')
   const { data, error } = await q
   if (error) throw error
-  if (!data.length) return msg(all ? '받은 의견이 없습니다.' : '✅ 확인 안 한 새 의견이 없습니다.')
-  const blocks = [section(`💬 *${all ? '최근 의견' : '새 의견'} ${data.length}건*`)]
+  if (!data.length) return msg(kept ? '📦 보관한 의견이 없습니다.' : '✅ 새 의견이 없습니다.')
+  const blocks = [section(`${kept ? '📦 *보관한 의견' : '💬 *새 의견'} ${data.length}건*`)]
   for (const f of data.slice(0, MAX_ITEMS)) {
     const meta = [fmtTime(f.created_at), f.context, device(f.ua ?? '')].filter(Boolean).join(' · ')
-    const btns = f.status === 'new' ? [button('확인함', 'fb_done', f.id, 'primary')] : []
-    btns.push(button('삭제', 'fb_delete', f.id, 'danger', '이 의견을 삭제할까요? 되돌릴 수 없습니다.'))
+    const btns = kept ? [] : [button('보관', 'fb_keep', f.id, 'primary')]
+    // 삭제 뒤 같은 목록을 다시 보여주도록 어느 목록인지 함께 보냄
+    btns.push(button('삭제', 'fb_delete', `${f.id}${kept ? ':kept' : ''}`, 'danger', '이 의견을 삭제할까요? 되돌릴 수 없습니다.'))
     blocks.push(
       { type: 'divider' },
-      section(`*[${esc(f.kind)}]*${f.status === 'done' ? '  ✔︎ 확인함' : ''}\n${esc(oneLine(f.message, 500))}\n_${esc(meta)}_`),
+      section(`*[${esc(f.kind)}]*\n${esc(oneLine(f.message, 500))}\n_${esc(meta)}_`),
       actions(...btns),
     )
   }
@@ -352,6 +361,75 @@ async function listReview(db) {
   return msg(`기타 검토 ${p.data.length}개`, blocks)
 }
 
+// ---------- 한눈에 보기: 메뉴별 요약 + [보기] 버튼 (누르면 같은 스레드에 자세한 목록) ----------
+const OPEN = {
+  open_requests: (db) => listRequests(db),
+  open_feedback: (db) => listFeedback(db, false),
+  open_feedback_kept: (db) => listFeedback(db, true),
+  open_review: (db) => listReview(db),
+  open_shops: (db) => viewShops(db),
+  open_status: (db) => viewStatus(db),
+  open_stats: (db) => viewStats(db, '7일'),
+}
+
+async function viewOverview(db) {
+  const head = (q) => q.then(({ count }) => count ?? 0)
+  const since7 = new Date(Date.now() - 7 * DAY).toISOString()
+  const events = async () => {
+    const rows = []
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data, error } = await db.from('events').select('created_at, visitor_id').gte('created_at', since7).range(from, from + 999)
+      if (error) throw error
+      rows.push(...data)
+      if (data.length < 1000) break
+    }
+    return rows
+  }
+  const [req, fbNew, fbKept, review, a, l, ev] = await Promise.all([
+    head(db.from('shop_requests').select('id', { count: 'exact', head: true }).in('status', ['pending', 'failed'])),
+    head(db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new')),
+    head(db.from('feedback').select('id', { count: 'exact', head: true }).neq('status', 'new')),
+    head(db.from('posts').select('code', { count: 'exact', head: true }).eq('needs_review', true)),
+    db.from('accounts').select('hidden, last_crawled_at'),
+    db.from('crawl_logs').select('created_at, message, level').order('created_at', { ascending: false }).limit(200),
+    events(),
+  ])
+  if (a.error) throw a.error
+  if (l.error) throw l.error
+
+  // 수집 상태 (viewStatus 와 같은 기준)
+  const logs = l.data
+  const lastRun = logs.find((x) => x.message.startsWith('피드 확인'))
+  const loginError = logs.find((x) => x.message.includes('로그인이 풀려'))
+  const loginBroken = loginError && (!lastRun || new Date(loginError.created_at) > new Date(lastRun.created_at))
+  const quiet = isQuiet(lastRun?.created_at)
+  const problems = logs.filter((x) => x.level !== 'info' && Date.now() - new Date(x.created_at).getTime() < DAY).length
+  const shown = a.data.filter((s) => !s.hidden)
+  const stale = shown.filter((s) => !s.last_crawled_at || Date.now() - new Date(s.last_crawled_at).getTime() > STALE_HOURS * 3600000).length
+
+  // 방문자: 오늘(한국 날짜) · 최근 7일
+  const today = kstDay(new Date().toISOString())
+  const visitors7 = new Set(ev.map((r) => r.visitor_id)).size
+  const visitorsToday = new Set(ev.filter((r) => kstDay(r.created_at) === today).map((r) => r.visitor_id)).size
+
+  const warn = (on) => (on ? '⚠️ ' : '')
+  const status = loginBroken
+    ? '🚨 인스타 로그인 풀림'
+    : `마지막 피드 확인 ${ago(lastRun?.created_at)} · 문제 ${problems}건${stale ? ` · 오래 수집 안 된 매장 ${stale}곳` : ''}`
+  const rows = [
+    [`📥 ${warn(req)}매장 신청 대기 *${req}건*`, button('신청 보기', 'open_requests', 'x')],
+    [`💬 ${warn(fbNew)}새 의견 *${fbNew}건* · 보관 ${fbKept}건`, button('의견 보기', fbNew || !fbKept ? 'open_feedback' : 'open_feedback_kept', 'x')],
+    [`📝 ${warn(review)}검토할 기타 글 *${review}개*`, button('기타 보기', 'open_review', 'x')],
+    [`🏪 매장 *${shown.length}곳*${a.data.length > shown.length ? ` (숨김 ${a.data.length - shown.length})` : ''}`, button('매장 보기', 'open_shops', 'x')],
+    [`🔄 ${warn(loginBroken || quiet || problems || stale)}${status}`, button('수집 보기', 'open_status', 'x')],
+    [`📊 오늘 방문자 *${visitorsToday}명* · 7일 ${visitors7}명`, button('통계 보기', 'open_stats', 'x')],
+  ]
+  const blocks = [section('*[굿즈레이더] 한눈에 보기*'), ...rows.map(([t, b]) => section(t, b))]
+  if (quiet && !loginBroken) blocks.push(context('⚠️ 1시간 넘게 자동 확인 기록이 없습니다. PC가 꺼졌거나 작업 스케줄러가 멈췄을 수 있습니다.'))
+  blocks.push(context(`버튼을 누르면 이 스레드에 자세한 목록이 나옵니다 · \`@goods-radar 도움말\` · <${SITE}/admin|관리자 화면>`))
+  return msg(`한눈에 보기: 신청 ${req} · 새 의견 ${fbNew} · 기타 검토 ${review}`, blocks)
+}
+
 function footer(total, tab, note = '') {
   const more = total > MAX_ITEMS ? `${MAX_ITEMS}개만 보여줍니다 (전체 ${total}개). ` : ''
   return context(`${more}${note} <${SITE}/admin?tab=${tab}|관리자 화면에서 보기>`.trim())
@@ -361,8 +439,9 @@ function footer(total, tab, note = '') {
 export async function answer(text, db) {
   const t = text.replace(/<@[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   try {
+    if (!t || /^(전체|한눈|요약|메뉴)/.test(t)) return await viewOverview(db)
     if (/^(신청|매장\s*신청)/.test(t)) return await listRequests(db)
-    if (/^의견/.test(t)) return await listFeedback(db, /전체|모두/.test(t))
+    if (/^의견/.test(t)) return await listFeedback(db, /보관/.test(t))
     if (/^(기타|검토)/.test(t)) return await listReview(db)
     if (/^매장/.test(t)) return await viewShops(db)
     if (/^(수집|상태)/.test(t)) return await viewStatus(db)
@@ -394,12 +473,15 @@ export async function act(action, value, db) {
       must(await db.from('shop_requests').update({ status: 'rejected', result: '거절 (슬랙)', reviewed_at: now }).eq('id', value))
       return { done: `🚫 @${data.username} 신청을 거절했습니다.`, list: 'requests' }
     }
-    case 'fb_done':
-      must(await db.from('feedback').update({ status: 'done', checked_at: now }).eq('id', value))
-      return { done: '✔︎ 의견을 확인함으로 옮겼습니다.', list: 'feedback' }
-    case 'fb_delete':
-      must(await db.from('feedback').delete().eq('id', value))
-      return { done: '🗑 의견을 삭제했습니다.', list: 'feedback' }
+    case 'fb_keep':
+    case 'fb_done': // 예전 메시지의 [확인함] 버튼도 보관으로 처리
+      must(await db.from('feedback').update({ status: 'kept', checked_at: now }).eq('id', value).eq('status', 'new'))
+      return { done: '📦 보관했습니다. (`@goods-radar 의견 보관`으로 보기)', list: 'feedback' }
+    case 'fb_delete': {
+      const [id, from] = String(value).split(':')
+      must(await db.from('feedback').delete().eq('id', id))
+      return { done: '🗑 의견을 삭제했습니다.', list: from === 'kept' ? 'feedback_kept' : 'feedback' }
+    }
     case 'post_publish':
       must(await db.from('posts').update({ category: '기타', goods_type: [], hidden: false, needs_review: false, manual: true }).eq('code', value))
       return { done: '✅ 기타로 게시했습니다.', list: 'review' }
@@ -418,7 +500,11 @@ export async function act(action, value, db) {
 }
 
 const relist = (list, db) =>
-  list === 'requests' ? listRequests(db) : list === 'feedback' ? listFeedback(db, false) : list === 'review' ? listReview(db) : Promise.resolve(msg(''))
+  list === 'requests'
+    ? listRequests(db)
+    : list === 'feedback' || list === 'feedback_kept'
+      ? listFeedback(db, list === 'feedback_kept')
+      : list === 'review' ? listReview(db) : Promise.resolve(msg(''))
 
 // ---------- 슬랙으로 보내기 ----------
 async function slackApi(method, payload) {
@@ -450,6 +536,18 @@ export async function POST(request) {
       return new Response('ok')
     }
     const client = db()
+    // 한눈에 보기의 [보기] 버튼: 요약은 그대로 두고 같은 스레드에 자세한 목록을 새로 보냄
+    if (OPEN[a.action_id]) {
+      let m
+      try {
+        m = await OPEN[a.action_id](client)
+      } catch (err) {
+        m = msg(`⚠️ 읽지 못했습니다: ${esc(err.message)}`)
+      }
+      const thread = p.message?.thread_ts ?? p.message?.ts
+      await slackApi('chat.postMessage', { channel: p.channel?.id, thread_ts: thread, unfurl_links: false, unfurl_media: false, ...m })
+      return new Response('ok')
+    }
     let out
     try {
       const r = await act(a.action_id, a.value, client)

@@ -1,4 +1,4 @@
-// 사용자 의견: 새 의견 → [확인함] 으로 정리
+// 사용자 의견: 새 의견 → [보관] (나중에 처리) 또는 [삭제] (완전히 지움)
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { fmtTime } from './util.js'
@@ -36,19 +36,25 @@ export default function Feedback({ onChange }) {
     load()
   }, [load])
 
-  const setStatus = async (id, status) => {
-    const { error } = await supabase
-      .from('feedback')
-      .update({ status, checked_at: status === 'done' ? new Date().toISOString() : null })
-      .eq('id', id)
-    if (error) return alert(`저장하지 못했습니다: ${error.message}`)
+  const keep = async (id) => {
+    const { error } = await supabase.from('feedback').update({ status: 'kept', checked_at: new Date().toISOString() }).eq('id', id)
+    if (error) return alert(`보관하지 못했습니다: ${error.message}`)
+    await load()
+    onChange?.()
+  }
+
+  const remove = async (id) => {
+    if (!confirm('이 의견을 삭제할까요? 되돌릴 수 없습니다.')) return
+    const { data, error } = await supabase.from('feedback').delete().eq('id', id).select('id')
+    if (error) return alert(`삭제하지 못했습니다: ${error.message}`)
+    if (!data?.length) return alert('삭제 권한이 없습니다. (supabase/14-feedback-status.sql 실행 필요)')
     await load()
     onChange?.()
   }
 
   if (!rows) return <p className="a-empty">불러오는 중…</p>
   const fresh = rows.filter((r) => r.status === 'new')
-  const done = rows.filter((r) => r.status === 'done')
+  const kept = rows.filter((r) => r.status !== 'new')
 
   const card = (r) => (
     <div key={r.id} className="a-card a-request">
@@ -61,30 +67,30 @@ export default function Feedback({ onChange }) {
       </p>
       <p className="a-muted a-small-text">{[r.context, device(r.ua ?? '')].filter(Boolean).join(' · ')}</p>
       <div className="a-actions">
-        {r.status === 'new' ? (
-          <button className="a-btn a-primary" onClick={() => setStatus(r.id, 'done')}>
-            확인함
-          </button>
-        ) : (
-          <button className="a-btn a-small" onClick={() => setStatus(r.id, 'new')}>
-            다시 새 의견으로
+        {r.status === 'new' && (
+          <button className="a-btn a-primary" onClick={() => keep(r.id)}>
+            보관
           </button>
         )}
+        <button className="a-btn a-danger" onClick={() => remove(r.id)}>
+          삭제
+        </button>
       </div>
     </div>
   )
 
   return (
     <div className="a-stack">
+      <p className="a-muted a-small-text">나중에 처리할 의견은 [보관], 필요 없거나 처리가 끝난 의견은 [삭제] (완전히 지워집니다).</p>
       <section>
         <h2 className="a-h2">새 의견 {fresh.length}개</h2>
         {fresh.length === 0 && <p className="a-empty">새로 온 의견이 없습니다.</p>}
         {fresh.map(card)}
       </section>
-      {done.length > 0 && (
+      {kept.length > 0 && (
         <section>
-          <h2 className="a-h2">확인한 의견</h2>
-          {done.map(card)}
+          <h2 className="a-h2">보관한 의견 {kept.length}개</h2>
+          {kept.map(card)}
         </section>
       )}
     </div>
