@@ -105,7 +105,7 @@ export default function RequestShop({ accounts, onClose }) {
               <input
                 value={insta}
                 onChange={(e) => setInsta(e.target.value)}
-                placeholder="예: instagram.com/goods_shop 또는 @goods_shop"
+                placeholder="예: @goods_shop 또는 instagram.com/goods_shop"
                 autoComplete="off"
                 autoCapitalize="off"
                 spellCheck="false"
