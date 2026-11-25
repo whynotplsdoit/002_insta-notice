@@ -63,6 +63,11 @@ export default function Requests({ onChange }) {
                     @{r.username}
                   </a>
                   {r.display_name && <span className="a-muted"> · {r.display_name}</span>}
+                  {r.map_url && (
+                    <a className="a-small-text" href={r.map_url} target="_blank" rel="noopener noreferrer">
+                      {' '}🗺 지도
+                    </a>
+                  )}
                   {r.auto_approved && <span className="a-pill info"> 자동 승인</span>}
                   {r.result && <div className="a-muted a-small-text">{r.result}</div>}
                   {r.auto_note && r.status !== 'rejected' && <div className="a-muted a-small-text">🔎 {r.auto_note}</div>}
@@ -112,6 +117,14 @@ function PendingCard({ req, exists, onUpdate }) {
         <span className="a-muted a-small-text">{fmtTime(req.created_at)} 신청</span>
       </div>
       {req.note && <p className="a-note">“{req.note}”</p>}
+      {req.map_url && (
+        <p className="a-small-text">
+          신청자가 보낸 지도:{' '}
+          <a className="a-btn a-small" href={req.map_url} target="_blank" rel="noopener noreferrer">
+            🗺 지도 열기 ({/kakao|kko\.to/i.test(req.map_url) ? '카카오' : '네이버'})
+          </a>
+        </p>
+      )}
       <p className="a-muted a-small-text">
         🔎 {req.auto_note ?? '자동 검토 대기 중 (PC 크롤러가 9~24시에 인스타·네이버를 확인합니다)'}
         {req.naver_place_id && (

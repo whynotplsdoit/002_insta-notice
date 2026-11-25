@@ -2,7 +2,7 @@
 //   한눈에 보기: "@goods-radar" 또는 "@goods-radar 전체" (메뉴별 요약 + [보기] 버튼)
 //   조회만: "@goods-radar 매장 / 수집 / 통계 [오늘|7일|30일|90일]"
 //   매장 신청: [승인] [거절 이유 선택 ▾]   (승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집)
-//   의견:      [보관] [삭제]   ("의견 보관": 보관한 의견 [삭제], 삭제는 완전히 지움)
+//   의견:      [보관] [삭제]   ("의견 보관": 보관한 의견 [삭제], "의견 스팸": 스팸함 [복원] [삭제], 삭제는 완전히 지움)
 //   기타 검토: [게시] [삭제]   (삭제는 글·사진을 지우고 다시 수집되지 않게 기록, 되돌릴 수 없음)
 //
 // 슬랙 앱 설정
@@ -88,7 +88,7 @@ const HELP = [
   '• `@goods-radar` 또는 `@goods-radar 전체`: 모든 메뉴 한눈에 보기 (버튼으로 자세히)',
   '*처리*',
   '• `@goods-radar 신청`: 확인이 필요한 매장 신청 → [승인] [거절 이유 선택]',
-  '• `@goods-radar 의견`: 새 의견 → [보관] [삭제]  (`의견 보관`: 보관한 의견 → [삭제])',
+  '• `@goods-radar 의견`: 새 의견 → [보관] [삭제]  (`의견 보관`: 보관한 의견 → [삭제] / `의견 스팸`: 자동으로 걸러진 의견 → [복원] [삭제])',
   '• `@goods-radar 기타`: 기타 검토 대기 글 → [게시] [삭제]',
   '*조회*',
   '• `@goods-radar 매장`: 매장 수·매장 목록',
@@ -297,7 +297,7 @@ async function viewStats(db, text) {
 async function listRequests(db) {
   const { data, error } = await db
     .from('shop_requests')
-    .select('id, username, display_name, region, status, note, auto_note, result, created_at')
+    .select('id, username, display_name, region, status, note, auto_note, result, created_at, map_url')
     .in('status', ['pending', 'failed'])
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -306,10 +306,14 @@ async function listRequests(db) {
   for (const r of data.slice(0, MAX_ITEMS)) {
     const name = [r.display_name, r.region].filter(Boolean).join(' · ')
     const why = r.status === 'failed' ? `⚠️ 추가 실패: ${r.result ?? ''}` : `🔎 ${r.auto_note ?? '자동 검토 대기 중'}`
+    // 신청자가 보낸 지도 링크 (슬랙 링크 문법이 깨지지 않게 | > 는 인코딩)
+    const map = r.map_url
+      ? `\n🗺 <${r.map_url.replace(/\|/g, '%7C').replace(/>/g, '%3E')}|신청자가 보낸 ${/kakao|kko\.to/i.test(r.map_url) ? '카카오' : '네이버'} 지도>`
+      : ''
     blocks.push(
       { type: 'divider' },
       section(
-        `<https://www.instagram.com/${r.username}/|*@${r.username}*>${name ? `  ${esc(name)}` : ''}  _${fmtTime(r.created_at)}_\n${esc(oneLine(why, 300))}${r.note ? `\n“${esc(oneLine(r.note, 150))}”` : ''}`,
+        `<https://www.instagram.com/${r.username}/|*@${r.username}*>${name ? `  ${esc(name)}` : ''}  _${fmtTime(r.created_at)}_\n${esc(oneLine(why, 300))}${map}${r.note ? `\n“${esc(oneLine(r.note, 150))}”` : ''}`,
       ),
       actions(button(r.status === 'failed' ? '다시 시도' : '승인', 'req_approve', r.id, 'primary'), picker('거절 이유 선택', 'req_reject', r.id, REJECT_REASONS)),
     )
@@ -318,22 +322,29 @@ async function listRequests(db) {
   return msg(`매장 신청 ${data.length}건`, blocks)
 }
 
-// kept=false: 새 의견 [보관] [삭제] / kept=true: 보관한 의견 [삭제]
-async function listFeedback(db, kept) {
-  let q = db.from('feedback').select('id, kind, message, context, ua, status, created_at').order('created_at', { ascending: false }).limit(30)
-  q = kept ? q.neq('status', 'new') : q.eq('status', 'new')
-  const { data, error } = await q
+// mode: 'new' 새 의견 [보관] [삭제] / 'kept' 보관한 의견 [삭제] / 'spam' 스팸함 [복원] [삭제]
+const FB_TITLE = { new: '💬 *새 의견', kept: '📦 *보관한 의견', spam: '🗑 *스팸함' }
+const FB_EMPTY = { new: '✅ 새 의견이 없습니다.', kept: '📦 보관한 의견이 없습니다.', spam: '🗑 스팸함이 비어 있습니다.' }
+async function listFeedback(db, mode = 'new') {
+  const { data, error } = await db
+    .from('feedback')
+    .select('id, kind, tag, message, context, ua, status, filter_note, created_at')
+    .eq('status', mode)
+    .order('created_at', { ascending: false })
+    .limit(30)
   if (error) throw error
-  if (!data.length) return msg(kept ? '📦 보관한 의견이 없습니다.' : '✅ 새 의견이 없습니다.')
-  const blocks = [section(`${kept ? '📦 *보관한 의견' : '💬 *새 의견'} ${data.length}건*`)]
+  if (!data.length) return msg(FB_EMPTY[mode])
+  const blocks = [section(`${FB_TITLE[mode]} ${data.length}건*`)]
+  if (mode === 'spam') blocks.push(context('자동으로 걸러진 의견입니다. 잘못 걸러졌으면 [복원], 30일 지나면 자동 삭제됩니다.'))
   for (const f of data.slice(0, MAX_ITEMS)) {
     const meta = [fmtTime(f.created_at), f.context, device(f.ua ?? '')].filter(Boolean).join(' · ')
-    const btns = kept ? [] : [button('보관', 'fb_keep', f.id, 'primary')]
+    const btns = mode === 'new' ? [button('보관', 'fb_keep', f.id, 'primary')] : mode === 'spam' ? [button('복원', 'fb_restore', f.id, 'primary')] : []
     // 삭제 뒤 같은 목록을 다시 보여주도록 어느 목록인지 함께 보냄
-    btns.push(button('삭제', 'fb_delete', `${f.id}${kept ? ':kept' : ''}`, 'danger', '이 의견을 삭제할까요? 되돌릴 수 없습니다.'))
+    btns.push(button('삭제', 'fb_delete', `${f.id}${mode === 'new' ? '' : `:${mode}`}`, 'danger', '이 의견을 삭제할까요? 되돌릴 수 없습니다.'))
+    const why = f.filter_note && mode === 'spam' ? `\n🤖 ${esc(oneLine(f.filter_note, 150))}` : ''
     blocks.push(
       { type: 'divider' },
-      section(`*[${esc(f.kind)}]*\n${esc(oneLine(f.message, 500))}\n_${esc(meta)}_`),
+      section(`*[${esc(f.kind)}]*${f.tag ? ` #${esc(f.tag)}` : ''}\n${esc(oneLine(f.message, 500))}${why}\n_${esc(meta)}_`),
       actions(...btns),
     )
   }
@@ -373,8 +384,9 @@ async function listReview(db) {
 // ---------- 한눈에 보기: 메뉴별 요약 + [보기] 버튼 (누르면 같은 스레드에 자세한 목록) ----------
 const OPEN = {
   open_requests: (db) => listRequests(db),
-  open_feedback: (db) => listFeedback(db, false),
-  open_feedback_kept: (db) => listFeedback(db, true),
+  open_feedback: (db) => listFeedback(db, 'new'),
+  open_feedback_kept: (db) => listFeedback(db, 'kept'),
+  open_feedback_spam: (db) => listFeedback(db, 'spam'),
   open_review: (db) => listReview(db),
   open_shops: (db) => viewShops(db),
   open_status: (db) => viewStatus(db),
@@ -394,10 +406,11 @@ async function viewOverview(db) {
     }
     return rows
   }
-  const [req, fbNew, fbKept, review, a, l, ev] = await Promise.all([
+  const [req, fbNew, fbKept, fbSpam, review, a, l, ev] = await Promise.all([
     head(db.from('shop_requests').select('id', { count: 'exact', head: true }).in('status', ['pending', 'failed'])),
     head(db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new')),
-    head(db.from('feedback').select('id', { count: 'exact', head: true }).neq('status', 'new')),
+    head(db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'kept')),
+    head(db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'spam')),
     head(db.from('posts').select('code', { count: 'exact', head: true }).eq('needs_review', true)),
     db.from('accounts').select('hidden, last_crawled_at'),
     db.from('crawl_logs').select('created_at, message, level').order('created_at', { ascending: false }).limit(200),
@@ -427,7 +440,10 @@ async function viewOverview(db) {
     : `마지막 피드 확인 ${ago(lastRun?.created_at)} · 문제 ${problems}건${stale ? ` · 오래 수집 안 된 매장 ${stale}곳` : ''}`
   const rows = [
     [`📥 ${warn(req)}매장 신청 대기 *${req}건*`, button('신청 보기', 'open_requests', 'x')],
-    [`💬 ${warn(fbNew)}새 의견 *${fbNew}건* · 보관 ${fbKept}건`, button('의견 보기', fbNew || !fbKept ? 'open_feedback' : 'open_feedback_kept', 'x')],
+    [
+      `💬 ${warn(fbNew)}새 의견 *${fbNew}건* · 보관 ${fbKept}건${fbSpam ? ` · 스팸함 ${fbSpam}건` : ''}`,
+      button('의견 보기', fbNew || (!fbKept && !fbSpam) ? 'open_feedback' : fbKept ? 'open_feedback_kept' : 'open_feedback_spam', 'x'),
+    ],
     [`📝 ${warn(review)}검토할 기타 글 *${review}개*`, button('기타 보기', 'open_review', 'x')],
     [`🏪 매장 *${shown.length}곳*${a.data.length > shown.length ? ` (숨김 ${a.data.length - shown.length})` : ''}`, button('매장 보기', 'open_shops', 'x')],
     [`🔄 ${warn(loginBroken || quiet || problems || stale)}${status}`, button('수집 보기', 'open_status', 'x')],
@@ -450,7 +466,7 @@ export async function answer(text, db) {
   try {
     if (!t || /^(전체|한눈|요약|메뉴)/.test(t)) return await viewOverview(db)
     if (/^(신청|매장\s*신청)/.test(t)) return await listRequests(db)
-    if (/^의견/.test(t)) return await listFeedback(db, /보관/.test(t))
+    if (/^(의견|스팸)/.test(t)) return await listFeedback(db, /스팸/.test(t) ? 'spam' : /보관/.test(t) ? 'kept' : 'new')
     if (/^(기타|검토)/.test(t)) return await listReview(db)
     if (/^매장/.test(t)) return await viewShops(db)
     if (/^(수집|상태)/.test(t)) return await viewStatus(db)
@@ -489,10 +505,13 @@ export async function act(action, value, db) {
     case 'fb_done': // 예전 메시지의 [확인함] 버튼도 보관으로 처리
       must(await db.from('feedback').update({ status: 'kept', checked_at: now }).eq('id', value).eq('status', 'new'))
       return { done: '📦 보관했습니다. (`@goods-radar 의견 보관`으로 보기)', list: 'feedback' }
+    case 'fb_restore':
+      must(await db.from('feedback').update({ status: 'new' }).eq('id', value).eq('status', 'spam'))
+      return { done: '↩️ 새 의견으로 복원했습니다.', list: 'feedback_spam' }
     case 'fb_delete': {
       const [id, from] = String(value).split(':')
       must(await db.from('feedback').delete().eq('id', id))
-      return { done: '🗑 의견을 삭제했습니다.', list: from === 'kept' ? 'feedback_kept' : 'feedback' }
+      return { done: '🗑 의견을 삭제했습니다.', list: from === 'kept' ? 'feedback_kept' : from === 'spam' ? 'feedback_spam' : 'feedback' }
     }
     case 'post_publish':
       must(await db.from('posts').update({ category: '기타', goods_type: [], hidden: false, needs_review: false, manual: true }).eq('code', value))
@@ -514,8 +533,8 @@ export async function act(action, value, db) {
 const relist = (list, db) =>
   list === 'requests'
     ? listRequests(db)
-    : list === 'feedback' || list === 'feedback_kept'
-      ? listFeedback(db, list === 'feedback_kept')
+    : list?.startsWith('feedback')
+      ? listFeedback(db, { feedback_kept: 'kept', feedback_spam: 'spam' }[list] ?? 'new')
       : list === 'review' ? listReview(db) : Promise.resolve(msg(''))
 
 // ---------- 슬랙으로 보내기 ----------

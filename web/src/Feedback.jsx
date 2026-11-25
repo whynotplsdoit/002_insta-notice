@@ -1,7 +1,6 @@
-// 의견 보내기 창: 관리자 화면 '의견' 탭에 쌓이고 카톡·슬랙으로 알림
+// 의견 보내기 창: 검사 서버(/api/feedback)가 스팸을 거른 뒤 관리자 화면 '의견' 탭에 쌓임 (아침 7시 알림에 건수)
 // 연락처 등 개인정보는 받지 않음 (기기·브라우저 이름만 오류 확인용으로 함께 저장)
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from './supabase.js'
 import { useScrollLock } from './useScrollLock.js'
 import { useBackToClose } from './useBackToClose.js'
 
@@ -10,6 +9,18 @@ const KINDS = [
   { id: '오류', hint: '화면이 이상하거나 버튼이 안 눌려요' },
   { id: '정보 수정', hint: '분류·일정·영업시간이 틀렸어요' },
 ]
+
+// 브라우저별 무작위 번호 (연속 전송 막기용, 개인정보 아님)
+function senderId() {
+  const make = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('')
+  try {
+    let id = localStorage.getItem('goods-radar:fid')
+    if (!id) localStorage.setItem('goods-radar:fid', (id = make()))
+    return id
+  } catch {
+    return make()
+  }
+}
 
 export default function Feedback({ context, onClose }) {
   const [kind, setKind] = useState('의견')
@@ -30,15 +41,21 @@ export default function Feedback({ context, onClose }) {
     const text = message.trim()
     if (text.length < 2) return setError('내용을 조금 더 적어 주세요.')
     setState('sending')
-    const { error: err } = await supabase.from('feedback').insert({
-      kind,
-      message: text,
-      context: context?.slice(0, 200) || null,
-      ua: navigator.userAgent.slice(0, 300),
-    })
-    if (err) {
+    // 검사 서버(/api/feedback)가 스팸을 거르고 저장
+    let status = 0
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, message: text, context: context?.slice(0, 200) || null, sender: senderId() }),
+      })
+      status = res.status
+    } catch {
+      status = 0
+    }
+    if (status !== 200) {
       setState('idle')
-      setError('보내지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      setError(status === 429 ? '너무 자주 보냈어요. 1분 뒤에 다시 보내 주세요.' : '보내지 못했습니다. 잠시 후 다시 시도해 주세요.')
       return
     }
     setState('done')

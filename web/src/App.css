@@ -108,6 +108,55 @@
 .field textarea:focus {
   border-color: var(--accent);
 }
+/* 매장 신청: 필수 칸은 눈에 띄게, 선택 칸은 한 단계 연하게 */
+.field-required {
+  padding: 12px;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+.field-required input {
+  border-color: var(--accent);
+}
+.field .tag-required {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.field-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.field-divider::before,
+.field-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--line);
+}
+.field-optional > span {
+  color: var(--muted);
+  font-weight: 600;
+}
+.tag-optional {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+}
 .hint {
   font-size: 12px;
   font-weight: 600;

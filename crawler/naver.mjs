@@ -13,8 +13,32 @@ export async function openNaverBrowser() {
 }
 
 // 네이버 플레이스 주소에서 번호 뽑기: map.naver.com/p/entry/place/123, m.place.naver.com/place/123, naver.me 는 열어서 확인
+// (m.place.naver.com/restaurant/123 처럼 업종 이름이 들어간 주소, ?placeId=123 도 처리)
 export function placeIdFromUrl(url) {
-  return String(url ?? '').match(/place\/(\d{5,})/)?.[1] ?? (/^\d{5,}$/.test(String(url ?? '').trim()) ? String(url).trim() : null)
+  const s = String(url ?? '')
+  return (
+    s.match(/place\/(\d{5,})/)?.[1] ??
+    s.match(/place\.naver\.com\/[a-z]+\/(\d{5,})/i)?.[1] ??
+    s.match(/[?&](?:placeId|id)=(\d{5,})/)?.[1] ??
+    (/^\d{5,}$/.test(s.trim()) ? s.trim() : null)
+  )
+}
+
+// 신청자가 보낸 지도 링크에서 네이버 플레이스 번호 찾기. naver.me 짧은 주소는 열어서 원래 주소 확인. 카카오·실패 → null
+export async function resolvePlaceId(context, url) {
+  if (!url || !/naver\.(me|com)/i.test(url)) return null
+  const direct = placeIdFromUrl(url)
+  if (direct) return direct
+  const page = await context.newPage()
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
+    await page.waitForTimeout(1500)
+    return placeIdFromUrl(page.url())
+  } catch {
+    return null
+  } finally {
+    await page.close()
+  }
 }
 
 export async function findPlaces(context, query) {

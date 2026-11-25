@@ -8,7 +8,7 @@
 //
 // 지운 글의 코드는 deleted_posts 에 남겨, 다음 수집 때 다시 들어오지 않게 합니다.
 // 기록 정리: 수집 기록(crawl_logs) 30일, 삭제 기록(deleted_posts) 1년, 사용 행동 기록(events) 180일,
-//           추가 완료·거절된 매장 신청(shop_requests) 30일 지나면 지움.
+//           추가 완료·거절된 매장 신청(shop_requests)·스팸함 의견(feedback status=spam) 30일 지나면 지움.
 import { db } from './db.mjs'
 
 export const MAX_KEEP_MONTHS = 3 // 모든 글 최대 게시 기간
@@ -17,6 +17,7 @@ export const LOG_KEEP_DAYS = 30 // 수집 기록
 export const DELETED_RECORD_KEEP_DAYS = 365 // 삭제 기록
 export const EVENT_LOG_KEEP_DAYS = 180 // 사용 행동 기록 (통계)
 export const REQUEST_KEEP_DAYS = 30 // 추가 완료·거절된 매장 신청 (거절 이유 포함)
+export const SPAM_KEEP_DAYS = 30 // 자동으로 걸러진 스팸 의견 (스팸함)
 
 const DAY = 86400000
 const KST = 9 * 3600000
@@ -61,7 +62,9 @@ export async function cleanupRecords(now = Date.now()) {
     .in('status', ['done', 'rejected'])
     .or(`reviewed_at.lt.${reqBefore},and(reviewed_at.is.null,created_at.lt.${reqBefore})`)
   if (q.error) throw new Error(`매장 신청 기록 정리: ${q.error.message}`)
-  return { logs: l.count ?? 0, records: r.count ?? 0, events: e.error ? 0 : e.count ?? 0, requests: q.count ?? 0 }
+  // 자동으로 걸러진 스팸 의견 (17-feedback-filter.sql 전이면 0)
+  const s = await db.from('feedback').delete({ count: 'exact' }).eq('status', 'spam').lt('created_at', new Date(now - SPAM_KEEP_DAYS * DAY).toISOString())
+  return { logs: l.count ?? 0, records: r.count ?? 0, events: e.error ? 0 : e.count ?? 0, requests: q.count ?? 0, spam: s.error ? 0 : s.count ?? 0 }
 }
 
 // 이미 지운 글 코드 목록 (크롤러가 다시 넣지 않도록)

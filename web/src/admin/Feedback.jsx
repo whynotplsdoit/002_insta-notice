@@ -1,4 +1,5 @@
 // 사용자 의견: 새 의견 → [보관] (나중에 처리) 또는 [삭제] (완전히 지움)
+// 스팸함: 검사 서버가 자동으로 거른 의견 → [복원] 또는 [삭제] (30일 뒤 자동 삭제)
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
 import { fmtTime } from './util.js'
@@ -52,24 +53,42 @@ export default function Feedback({ onChange }) {
     onChange?.()
   }
 
+  // 스팸함 → 새 의견으로 되돌리기
+  const restore = async (id) => {
+    const { error } = await supabase.from('feedback').update({ status: 'new' }).eq('id', id)
+    if (error) return alert(`복원하지 못했습니다: ${error.message}`)
+    await load()
+    onChange?.()
+  }
+
   if (!rows) return <p className="a-empty">불러오는 중…</p>
   const fresh = rows.filter((r) => r.status === 'new')
-  const kept = rows.filter((r) => r.status !== 'new')
+  const kept = rows.filter((r) => r.status === 'kept')
+  const spam = rows.filter((r) => r.status === 'spam')
 
   const card = (r) => (
     <div key={r.id} className="a-card a-request">
       <div className="a-request-head">
-        <span className={`a-pill ${KIND_CLS[r.kind] ?? 'mute'}`}>{r.kind}</span>
+        <span>
+          <span className={`a-pill ${KIND_CLS[r.kind] ?? 'mute'}`}>{r.kind}</span>
+          {r.tag && <span className="a-pill mute"> #{r.tag}</span>}
+        </span>
         <span className="a-muted a-small-text">{fmtTime(r.created_at)}</span>
       </div>
       <p className="a-note" style={{ whiteSpace: 'pre-wrap' }}>
         {r.message}
       </p>
       <p className="a-muted a-small-text">{[r.context, device(r.ua ?? '')].filter(Boolean).join(' · ')}</p>
+      {r.filter_note && <p className="a-muted a-small-text">🤖 {r.filter_note}</p>}
       <div className="a-actions">
         {r.status === 'new' && (
           <button className="a-btn a-primary" onClick={() => keep(r.id)}>
             보관
+          </button>
+        )}
+        {r.status === 'spam' && (
+          <button className="a-btn a-primary" onClick={() => restore(r.id)}>
+            복원
           </button>
         )}
         <button className="a-btn a-danger" onClick={() => remove(r.id)}>
@@ -92,6 +111,15 @@ export default function Feedback({ onChange }) {
           <h2 className="a-h2">보관한 의견 {kept.length}개</h2>
           {kept.map(card)}
         </section>
+      )}
+      {spam.length > 0 && (
+        <details className="a-spam">
+          <summary className="a-h2">🗑 스팸함 {spam.length}개</summary>
+          <p className="a-muted a-small-text">
+            자동으로 걸러진 의견입니다 (자음·모음 남발, 욕설만, 광고). 잘못 걸러졌으면 [복원], 30일 지나면 자동 삭제됩니다.
+          </p>
+          {spam.map(card)}
+        </details>
       )}
     </div>
   )

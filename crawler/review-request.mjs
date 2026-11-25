@@ -7,7 +7,7 @@
 // 팔로우는 하지 않고 보기만 함. 승인되면 watch.mjs 의 "승인된 매장 추가" 단계가 팔로우·첫 수집을 함.
 import { db } from './db.mjs'
 import { inspectAccount } from './instagram.mjs'
-import { findPlaces, fetchPlace } from './naver.mjs'
+import { findPlaces, fetchPlace, resolvePlaceId } from './naver.mjs'
 import { classifyPosts } from './classify.mjs'
 import { detectFixedHashtags } from './add-shop.mjs'
 
@@ -59,7 +59,19 @@ export async function autoAddedToday() {
 }
 
 // 네이버에서 이 매장 찾기: 인스타 주소가 연결된 플레이스 > 이름이 같고 업종이 맞는 플레이스
-async function findShopOnNaver(naver, username, names, region) {
+// mapUrl: 신청자가 보낸 지도 링크 (네이버면 그 매장을 먼저 확인)
+async function findShopOnNaver(naver, username, names, region, mapUrl) {
+  const isInsta = (p) => p.homepages.some((u) => new RegExp(`instagram\\.com/${username.replace(/\./g, '\\.')}(/|\\?|$)`, 'i').test(u))
+  const linkId = await resolvePlaceId(naver, mapUrl)
+  if (linkId) {
+    try {
+      const p = await fetchPlace(naver, linkId)
+      return { place: p, how: isInsta(p) ? 'insta' : 'link' }
+    } catch {
+      // 링크 매장을 못 읽으면 이름 검색으로
+    }
+  }
+  if (!names.length) return null
   const queries = [...new Set(names.filter(Boolean).flatMap((n) => [region ? `${n} ${region}` : null, n]).filter(Boolean))].slice(0, 3)
   const seen = new Set()
   let nameMatch = null
@@ -73,7 +85,7 @@ async function findShopOnNaver(naver, username, names, region) {
       } catch {
         continue
       }
-      if (p.homepages.some((u) => new RegExp(`instagram\\.com/${username.replace(/\./g, '\\.')}(/|\\?|$)`, 'i').test(u))) {
+      if (isInsta(p)) {
         return { place: p, how: 'insta' }
       }
       const pn = norm(p.name)
@@ -114,24 +126,25 @@ export async function reviewRequest(ig, naver, req, { registered, canAutoAdd, kn
 
   // 2) 네이버 플레이스
   const names = [...new Set([req.display_name, cleanName(acc.fullName)].filter(Boolean))]
-  const found = names.length ? await findShopOnNaver(naver, req.username, names, req.region) : null
+  const found = await findShopOnNaver(naver, req.username, names, req.region, req.map_url)
   const p = found?.place
   const catOk = p && PLACE_CATEGORY.test(`${p.category ?? ''} ${p.name}`)
   const placeOk = found && (found.how === 'insta' || catOk)
   const naverNote = p
-    ? `네이버: ${p.name}${p.category ? `(${p.category})` : ''} · ${found.how === 'insta' ? '인스타 연결 확인' : '이름 일치'}${p.roadAddress || p.address ? ` · ${p.roadAddress ?? p.address}` : ''}`
+    ? `네이버: ${p.name}${p.category ? `(${p.category})` : ''} · ${{ insta: '인스타 연결 확인', link: '신청자 지도 링크' }[found.how] ?? '이름 일치'}${p.roadAddress || p.address ? ` · ${p.roadAddress ?? p.address}` : ''}`
     : '네이버: 매장을 찾지 못함'
   const note = `${igNote} / ${naverNote}`
   const extra = {
     // 인스타 이름에 네이버 매장 이름이 들어 있으면 짧은 네이버 이름 ("홍대굿즈샵 안서당" → "안서당")
+    // 신청자가 적은 이름은 검색 참고만 (신청 창에서는 칸을 뺌)
     displayName: (
-      req.display_name ||
       (placeOk && norm(p.name).length >= 2 && norm(cleanName(acc.fullName)).includes(norm(p.name)) ? p.name : null) ||
       cleanName(acc.fullName) ||
       p?.name ||
       req.username
     ).slice(0, 40),
-    region: (req.region || regionFromAddress(p?.roadAddress ?? p?.address, knownBranches) || '').slice(0, 20) || null,
+    // 지역은 네이버 주소로만 정함 (신청자가 적은 "서울" 같은 값은 검색 참고만, 신청 창에서는 칸을 뺌)
+    region: (regionFromAddress(p?.roadAddress ?? p?.address, knownBranches) || '').slice(0, 20) || null,
     naverPlaceId: placeOk ? p.id : null,
   }
 

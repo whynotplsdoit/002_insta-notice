@@ -38,7 +38,7 @@ try {
   if (removed.length) await log(`🗑 오래된 글 ${removed.length}개 삭제 (${summarize(removed)})`)
   const rec = await cleanupRecords()
   if (rec.logs || rec.records || rec.requests)
-    console.log(`기록 정리: 수집 기록 ${rec.logs}줄, 삭제 기록 ${rec.records}개, 처리된 매장 신청 ${rec.requests}건`)
+    console.log(`기록 정리: 수집 기록 ${rec.logs}줄, 삭제 기록 ${rec.records}개, 처리된 매장 신청 ${rec.requests}건, 스팸 의견 ${rec.spam}건`)
 } catch (err) {
   await log(`✗ 오래된 글 삭제 실패: ${err.message}`, { level: 'error' })
 }
@@ -95,7 +95,7 @@ try {
           ? { ...base, status: 'approved', auto_approved: true, reviewed_at: stamp, display_name: r.displayName, region: r.region, account_type: '굿즈샵', naver_place_id: r.naverPlaceId }
           : r.decision === 'reject'
             ? { ...base, status: 'rejected', reviewed_at: stamp, result: `자동 거절: ${r.note}`.slice(0, 500) }
-            : { ...base, naver_place_id: r.naverPlaceId, display_name: req.display_name ?? r.displayName, region: req.region ?? r.region }
+            : { ...base, naver_place_id: r.naverPlaceId, display_name: r.displayName ?? req.display_name, region: r.region ?? req.region }
       const u = await db.from('shop_requests').update(row).eq('id', req.id)
       if (u.error) throw new Error(u.error.message)
       const label = { approve: '자동 승인', reject: '자동 거절', manual: '관리자 확인 필요' }[r.decision]

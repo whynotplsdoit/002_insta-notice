@@ -12,3 +12,6 @@ data-debug.png
 # 비밀 키 (절대 GitHub에 올리지 않음)
 .env
 .env.local
+
+# Claude Code 개인 설정
+.claude/settings.local.json

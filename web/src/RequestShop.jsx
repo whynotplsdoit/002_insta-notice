@@ -14,10 +14,24 @@ export function parseUsername(input) {
   return /^[a-z0-9._]{1,30}$/.test(name) ? name : null
 }
 
+// 지도 공유 글("[네이버 지도] 매장 … https://naver.me/abc")에서 네이버·카카오 지도 주소만 뽑기
+// 반환: '' (안 적음) | 주소 | null (지도 주소 아님)
+const MAP_HOST = /^(naver\.me|(m\.)?map\.naver\.com|((m|pcmap)\.)?place\.naver\.com|kko\.to|kko\.kakao\.com|place\.map\.kakao\.com|(m\.)?map\.kakao\.com)$/i
+export function parseMapUrl(input) {
+  const text = input.trim()
+  if (!text) return ''
+  const raw = text.match(/https?:\/\/[^\s<>"']+/i)?.[0] ?? (/^(naver\.me|kko\.to|[a-z.]*map\.(naver|kakao)\.com|[a-z.]*place\.naver\.com)\//i.test(text) ? `https://${text.split(/\s/)[0]}` : null)
+  if (!raw || raw.length > 300) return null
+  try {
+    return MAP_HOST.test(new URL(raw).hostname) ? raw : null
+  } catch {
+    return null
+  }
+}
+
 export default function RequestShop({ accounts, onClose }) {
   const [insta, setInsta] = useState('')
-  const [name, setName] = useState('')
-  const [region, setRegion] = useState('')
+  const [mapLink, setMapLink] = useState('')
   const [note, setNote] = useState('')
   const [state, setState] = useState('idle') // idle | sending | done
   const [error, setError] = useState('')
@@ -33,18 +47,19 @@ export default function RequestShop({ accounts, onClose }) {
 
   const username = parseUsername(insta)
   const existing = username && accounts.find((a) => a.username === username)
+  const mapUrl = parseMapUrl(mapLink)
 
   const submit = async (e) => {
     e.preventDefault()
     setError('')
     if (!username) return setError('인스타그램 주소나 아이디를 확인해 주세요.')
     if (existing) return setError(`이미 있는 매장입니다: ${existing.display_name}`)
+    if (mapUrl === null) return setError('지도 링크는 네이버·카카오 지도 링크만 넣어 주세요.')
     setState('sending')
     const { error: err } = await supabase.from('shop_requests').insert({
       username,
-      display_name: name.trim() || null,
-      region: region.trim() || null,
       note: note.trim() || null,
+      ...(mapUrl ? { map_url: mapUrl } : {}),
     })
     if (err) {
       setState('idle')
@@ -79,11 +94,13 @@ export default function RequestShop({ accounts, onClose }) {
         ) : (
           <form onSubmit={submit}>
             <h2 id="request-title">매장 추가 신청</h2>
-            <p className="modal-desc">보고 싶은 굿즈샵의 인스타그램을 알려주세요. 확인 후 추가됩니다.</p>
+            <p className="modal-desc">
+              <b>인스타그램만 알려주시면 돼요.</b> 나머지는 몰라도 괜찮아요.
+            </p>
 
-            <label className="field">
+            <label className="field field-required">
               <span>
-                인스타그램 주소 또는 아이디 <em>필수</em>
+                인스타그램 주소 또는 아이디 <em className="tag-required">필수</em>
               </span>
               <input
                 value={insta}
@@ -98,18 +115,31 @@ export default function RequestShop({ accounts, onClose }) {
               {existing && <small className="hint warn">이미 있는 매장: {existing.display_name}</small>}
             </label>
 
-            <label className="field">
-              <span>매장 이름</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 굿즈상점" maxLength={40} />
+            <div className="field-divider">
+              <span>선택 입력</span>
+            </div>
+
+            <label className="field field-optional">
+              <span>
+                지도 링크 (네이버·카카오) <i className="tag-optional">선택</i>
+              </span>
+              <input
+                value={mapLink}
+                onChange={(e) => setMapLink(e.target.value)}
+                placeholder="지도 앱의 [공유] → 링크 복사 후 붙여넣기"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                inputMode="url"
+              />
+              {mapLink && mapUrl && <small className="hint ok">지도 링크 확인됨</small>}
+              {mapLink && mapUrl === null && <small className="hint warn">네이버·카카오 지도 링크가 아니에요</small>}
             </label>
 
-            <label className="field">
-              <span>지역</span>
-              <input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="예: 홍대, 강남, 부산" maxLength={20} />
-            </label>
-
-            <label className="field">
-              <span>하고 싶은 말</span>
+            <label className="field field-optional">
+              <span>
+                하고 싶은 말 <i className="tag-optional">선택</i>
+              </span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
