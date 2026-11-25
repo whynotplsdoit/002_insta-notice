@@ -47,13 +47,14 @@ export function regionFromAddress(address, known = []) {
 }
 
 // 오늘(한국 날짜) 자동 승인한 수
+// 추가 완료된 신청은 바로 지우므로 신청 표가 아니라 수집 기록(watch.mjs 의 "🔎 매장 신청 @… 자동 승인:")으로 셈
 export async function autoAddedToday() {
   const start = new Date(`${new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })}T00:00:00+09:00`).toISOString()
   const { count } = await db
-    .from('shop_requests')
-    .select('id', { count: 'exact', head: true })
-    .eq('auto_approved', true)
-    .gte('reviewed_at', start)
+    .from('crawl_logs')
+    .select('*', { count: 'exact', head: true })
+    .like('message', '🔎 매장 신청 @% 자동 승인:%')
+    .gte('created_at', start)
   return count ?? 0
 }
 

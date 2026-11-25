@@ -1,7 +1,7 @@
 // 슬랙 관리 봇: 채널에서 "@goods-radar 신청 / 의견 / 기타" 로 목록을 부르고, 버튼으로 바로 처리
 //   한눈에 보기: "@goods-radar" 또는 "@goods-radar 전체" (메뉴별 요약 + [보기] 버튼)
 //   조회만: "@goods-radar 매장 / 수집 / 통계 [오늘|7일|30일|90일]"
-//   매장 신청: [승인] [거절]   (승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집)
+//   매장 신청: [승인] [거절 이유 선택 ▾]   (승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집)
 //   의견:      [보관] [삭제]   ("의견 보관": 보관한 의견 [삭제], 삭제는 완전히 지움)
 //   기타 검토: [게시] [삭제]   (삭제는 글·사진을 지우고 다시 수집되지 않게 기록, 되돌릴 수 없음)
 //
@@ -72,13 +72,22 @@ const button = (label, action, value, style, confirm) => ({
     : {}),
 })
 const actions = (...els) => ({ type: 'actions', elements: els })
+// 고르면 바로 처리되는 드롭다운 (값: "id|고른 항목")
+const picker = (placeholder, action, id, options) => ({
+  type: 'static_select',
+  action_id: action,
+  placeholder: { type: 'plain_text', text: placeholder },
+  options: options.map((o) => ({ text: { type: 'plain_text', text: o }, value: `${id}|${o}` })),
+})
+// 직접 거절할 때 고르는 이유 (관리자 화면 web/src/admin/Requests.jsx 와 같은 목록)
+const REJECT_REASONS = ['굿즈샵 아님', '이미 등록됨', '운영 안 함', '계정 없음·비공개', '기타']
 const msg = (text, blocks) => ({ text, blocks })
 
 const HELP = [
   '*굿즈레이더 관리 봇* 사용법',
   '• `@goods-radar` 또는 `@goods-radar 전체`: 모든 메뉴 한눈에 보기 (버튼으로 자세히)',
   '*처리*',
-  '• `@goods-radar 신청`: 확인이 필요한 매장 신청 → [승인] [거절]',
+  '• `@goods-radar 신청`: 확인이 필요한 매장 신청 → [승인] [거절 이유 선택]',
   '• `@goods-radar 의견`: 새 의견 → [보관] [삭제]  (`의견 보관`: 보관한 의견 → [삭제])',
   '• `@goods-radar 기타`: 기타 검토 대기 글 → [게시] [삭제]',
   '*조회*',
@@ -302,7 +311,7 @@ async function listRequests(db) {
       section(
         `<https://www.instagram.com/${r.username}/|*@${r.username}*>${name ? `  ${esc(name)}` : ''}  _${fmtTime(r.created_at)}_\n${esc(oneLine(why, 300))}${r.note ? `\n“${esc(oneLine(r.note, 150))}”` : ''}`,
       ),
-      actions(button(r.status === 'failed' ? '다시 시도' : '승인', 'req_approve', r.id, 'primary'), button('거절', 'req_reject', r.id, 'danger')),
+      actions(button(r.status === 'failed' ? '다시 시도' : '승인', 'req_approve', r.id, 'primary'), picker('거절 이유 선택', 'req_reject', r.id, REJECT_REASONS)),
     )
   }
   blocks.push(footer(data.length, 'requests', '승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집을 합니다.'))
@@ -468,10 +477,13 @@ export async function act(action, value, db) {
       return { done: `✅ @${data.username} 승인했습니다. PC 크롤러가 15분 안에 추가합니다.`, list: 'requests' }
     }
     case 'req_reject': {
-      const { data } = must(await db.from('shop_requests').select('username, status').eq('id', value).maybeSingle())
+      // 값: "id|이유" (예전 메시지의 [거절] 버튼은 id 만 옴)
+      const [id, reason] = String(value).split('|')
+      const { data } = must(await db.from('shop_requests').select('username, status').eq('id', id).maybeSingle())
       if (!data || !['pending', 'failed'].includes(data.status)) return { done: '이미 처리된 신청입니다.', list: 'requests' }
-      must(await db.from('shop_requests').update({ status: 'rejected', result: '거절 (슬랙)', reviewed_at: now }).eq('id', value))
-      return { done: `🚫 @${data.username} 신청을 거절했습니다.`, list: 'requests' }
+      const why = REJECT_REASONS.includes(reason) ? reason : '이유 없음'
+      must(await db.from('shop_requests').update({ status: 'rejected', result: `거절: ${why} (슬랙)`, reviewed_at: now }).eq('id', id))
+      return { done: `🚫 @${data.username} 신청을 거절했습니다. (${why})`, list: 'requests' }
     }
     case 'fb_keep':
     case 'fb_done': // 예전 메시지의 [확인함] 버튼도 보관으로 처리
@@ -550,7 +562,7 @@ export async function POST(request) {
     }
     let out
     try {
-      const r = await act(a.action_id, a.value, client)
+      const r = await act(a.action_id, a.value ?? a.selected_option?.value, client) // 버튼은 value, 드롭다운은 selected_option
       const m = await relist(r.list, client)
       out = { text: `${r.done}\n${m.text}`, blocks: [context(`${esc(r.done)}  · <@${p.user.id}>`), ...(m.blocks ?? [section(m.text)])] }
     } catch (err) {

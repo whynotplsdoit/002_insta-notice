@@ -11,6 +11,9 @@ const STATUS = {
   rejected: { label: '거절', cls: 'mute' },
 }
 
+// 직접 거절할 때 고르는 이유 (슬랙 web/api/slack.js 와 같은 목록)
+const REJECT_REASONS = ['굿즈샵 아님', '이미 등록됨', '운영 안 함', '계정 없음·비공개', '기타']
+
 export default function Requests({ onChange }) {
   const [rows, setRows] = useState(null)
   const [existing, setExisting] = useState(new Set())
@@ -75,7 +78,8 @@ export default function Requests({ onChange }) {
           </div>
           <p className="a-muted a-small-text">
             승인하면 이 PC의 크롤러가 15분 안에 부계정 팔로우와 첫 수집을 하고 매장 목록에 추가합니다. 새 신청은 크롤러가 먼저
-            자동 검토해서, 확실한 곳은 바로 추가하고(하루 최대 3곳) 확실히 아닌 곳은 거절합니다.
+            자동 검토해서, 확실한 곳은 바로 추가하고(하루 최대 3곳) 확실히 아닌 곳은 거절합니다. 추가가 끝난 신청은 바로 지워지고(매장
+            목록에서 확인), 거절된 신청은 이유와 함께 30일 동안 남습니다.
           </p>
         </section>
       )}
@@ -87,6 +91,17 @@ function PendingCard({ req, exists, onUpdate }) {
   const [name, setName] = useState(req.display_name ?? '')
   const [region, setRegion] = useState(req.region ?? '')
   const [type, setType] = useState(req.account_type ?? '굿즈샵')
+  const [rejecting, setRejecting] = useState(false)
+
+  const reject = (reason) => {
+    let why = reason
+    if (reason === '기타') {
+      const typed = prompt('거절 이유를 한 줄로 적어 주세요. (비워도 됩니다)', '')
+      if (typed === null) return // 취소
+      why = typed.trim() ? `기타: ${typed.trim().slice(0, 200)}` : '기타'
+    }
+    onUpdate(req.id, { status: 'rejected', result: `거절: ${why} (관리자)` })
+  }
 
   return (
     <div className="a-card a-request">
@@ -128,8 +143,21 @@ function PendingCard({ req, exists, onUpdate }) {
         </label>
       </div>
       <p className="a-muted a-small-text">인스타 링크를 열어 굿즈샵이 맞는지, 공개 계정인지 확인한 뒤 승인하세요.</p>
+      {rejecting && (
+        <div className="a-actions">
+          <span className="a-muted a-small-text">거절 이유:</span>
+          {REJECT_REASONS.map((r) => (
+            <button key={r} className="a-btn a-small a-danger" onClick={() => reject(r)}>
+              {r}
+            </button>
+          ))}
+          <button className="a-btn a-small" onClick={() => setRejecting(false)}>
+            취소
+          </button>
+        </div>
+      )}
       <div className="a-actions">
-        <button className="a-btn" onClick={() => onUpdate(req.id, { status: 'rejected', result: '거절' })}>
+        <button className="a-btn" onClick={() => setRejecting((v) => !v)}>
           거절
         </button>
         <button

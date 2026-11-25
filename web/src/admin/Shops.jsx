@@ -138,7 +138,16 @@ function ShopEditor({ shop, branches, onSaved, onDeleted }) {
   }
 
   const remove = async () => {
-    if (!confirm(`'${shop.display_name}' 매장과 수집한 글을 모두 삭제할까요?\n되돌릴 수 없습니다. 잠시 빼려면 "숨기기"를 쓰세요.`)) return
+    if (!confirm(`'${shop.display_name}' 매장과 수집한 글·사진을 모두 삭제할까요?\n되돌릴 수 없습니다. 잠시 빼려면 "숨기기"를 쓰세요.`)) return
+    // 사진 파일 먼저 지움 (매장을 지우면 글은 DB에서 같이 지워지지만 사진 파일은 남기 때문)
+    const { data: pics, error: pe } = await supabase.from('posts').select('image_path').eq('account_username', shop.username).not('image_path', 'is', null)
+    if (pe) return alert(`삭제하지 못했습니다: ${pe.message}`)
+    const { data: acct } = await supabase.from('accounts').select('profile_image_path').eq('username', shop.username).maybeSingle()
+    const paths = [...pics.map((p) => p.image_path), acct?.profile_image_path].filter(Boolean)
+    for (let i = 0; i < paths.length; i += 100) {
+      const { error: se } = await supabase.storage.from('post-images').remove(paths.slice(i, i + 100))
+      if (se) return alert(`사진을 지우지 못해 멈췄습니다: ${se.message}`)
+    }
     const { error } = await supabase.from('accounts').delete().eq('username', shop.username)
     if (error) return alert(`삭제하지 못했습니다: ${error.message}`)
     onDeleted()

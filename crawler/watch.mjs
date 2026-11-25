@@ -37,7 +37,8 @@ try {
   const removed = await deleteExpiredPosts()
   if (removed.length) await log(`🗑 오래된 글 ${removed.length}개 삭제 (${summarize(removed)})`)
   const rec = await cleanupRecords()
-  if (rec.logs || rec.records) console.log(`기록 정리: 수집 기록 ${rec.logs}줄, 삭제 기록 ${rec.records}개`)
+  if (rec.logs || rec.records || rec.requests)
+    console.log(`기록 정리: 수집 기록 ${rec.logs}줄, 삭제 기록 ${rec.records}개, 처리된 매장 신청 ${rec.requests}건`)
 } catch (err) {
   await log(`✗ 오래된 글 삭제 실패: ${err.message}`, { level: 'error' })
 }
@@ -123,7 +124,9 @@ try {
         ),
       )
       const msg = `${r.account.displayName} 추가 완료: 글 ${r.total}개, 사진 ${r.imagesUploaded}장${r.followed === 'failed' ? ' (⚠ 팔로우 실패: 부계정으로 직접 팔로우 필요)' : ''}`
-      await db.from('shop_requests').update({ status: 'done', result: msg }).eq('id', req.id)
+      // 매장 목록에 들어갔으니 신청은 바로 지움 (추가 기록은 수집 기록의 "🏪 … 추가 완료"로 남음)
+      const del = await db.from('shop_requests').delete().eq('id', req.id)
+      if (del.error) await db.from('shop_requests').update({ status: 'done', result: msg }).eq('id', req.id) // 못 지우면 완료 표시 (30일 뒤 정리)
       await log(`🏪 ${msg}`, { account: req.username })
       alerts.added.push(r.account.displayName)
     } catch (err) {
