@@ -90,13 +90,10 @@ function ReviewCard({ post, shopName, onDone }) {
         </div>
         <p className="a-caption">{post.caption || '(본문 없음)'}</p>
         <div className="a-actions a-review-actions">
-          <a className="a-btn a-small" href={post.url} target="_blank" rel="noopener noreferrer">
-            인스타 ↗
-          </a>
-          <span className="a-spacer" />
           <button className="a-btn a-danger" disabled={busy} onClick={remove}>
             삭제
           </button>
+          <span className="a-spacer" />
           <select className="a-input a-input-sm" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="확정할 분류">
             {CATEGORIES.map((c) => (
               <option key={c}>{c}</option>
