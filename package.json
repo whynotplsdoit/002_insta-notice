@@ -16,7 +16,8 @@
     "setup:admin": "node --env-file=.env crawler/setup-admin.mjs",
     "naver": "node --env-file=.env crawler/naver-sync.mjs",
     "kakao:login": "node --env-file=.env crawler/kakao-login.mjs",
-    "shrink:images": "node --env-file=.env crawler/shrink-existing.mjs"
+    "shrink:images": "node --env-file=.env crawler/shrink-existing.mjs",
+    "make:thumbs": "node --env-file=.env crawler/make-thumbs.mjs"
   },
   "devDependencies": {
     "playwright": "^1.65.1"

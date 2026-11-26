@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import { db } from './db.mjs'
 import { classifyPosts } from './classify.mjs'
 import { hasNoCaption, loadDeletedCodes, recordDeleted } from './cleanup.mjs'
-import { CACHE_SECONDS, POST_WIDTH, PROFILE_WIDTH, shrinkImage } from './shrink.mjs'
+import { CACHE_SECONDS, POST_WIDTH, PROFILE_WIDTH, THUMB_WIDTH, shrinkImage, thumbPath } from './shrink.mjs'
 
 const BUCKET = 'post-images'
 
@@ -82,16 +82,30 @@ async function uploadImage(username, code, imageUrl, width = POST_WIDTH) {
     if (!res.ok) return null
     const type = res.headers.get('content-type') ?? 'image/jpeg'
     if (!type.startsWith('image/')) return null
-    const small = await shrinkImage(Buffer.from(await res.arrayBuffer()), width)
+    const original = Buffer.from(await res.arrayBuffer())
     const path = `${username}/${code}.webp`
-    const { error } = await db.storage
-      .from(BUCKET)
-      .upload(path, small, { contentType: 'image/webp', upsert: true, cacheControl: CACHE_SECONDS })
+    const put = async (p, buf) =>
+      (await db.storage.from(BUCKET).upload(p, buf, { contentType: 'image/webp', upsert: true, cacheControl: CACHE_SECONDS })).error
+    // 글 사진은 목록용 작은 사진도 같이 (사이트는 작은 사진이 없으면 큰 사진을 씀)
+    if (width === POST_WIDTH) await put(thumbPath(path), await shrinkImage(original, THUMB_WIDTH))
+    const error = await put(path, await shrinkImage(original, width))
     return error ? null : path
   } catch {
     return null
   }
 }
+
+// 다시 저장할지 비교하는 칸. 바뀐 게 없으면 저장하지 않음
+// (저장할 때마다 사이트를 보고 있는 모든 사람에게 실시간 알림이 가서 Supabase 전송량을 씀)
+const COMPARE = ['url', 'posted_at', 'media_type', 'pinned', 'caption', 'image_path', 'category', 'goods_type', 'works', 'branches', 'starts_at', 'ends_at']
+const TIME_COLS = new Set(['posted_at', 'starts_at', 'ends_at'])
+const sameValue = (col, a, b) => {
+  if (a == null || b == null) return a == null && b == null
+  if (TIME_COLS.has(col)) return new Date(a).getTime() === new Date(b).getTime()
+  if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b)
+  return a === b
+}
+const changed = (row, old) => Object.keys(row).some((k) => COMPARE.includes(k) && !sameValue(k, row[k], old[k]))
 
 const codeOf = (post) => post.code ?? post.url.match(/\/(?:p|reel)\/([^/]+)/)?.[1]
 
@@ -109,7 +123,7 @@ export async function savePosts(account, posts, works) {
 
   const { data: existing, error } = await db
     .from('posts')
-    .select('code, image_path, manual')
+    .select(`code, manual, ${COMPARE.join(', ')}`)
     .in('code', classified.map((p) => p.code))
   if (error) throw new Error(`기존 글 확인: ${error.message}`)
   const known = new Map(existing.map((e) => [e.code, e]))
@@ -155,8 +169,8 @@ export async function savePosts(account, posts, works) {
       const review = p.category === '기타' && !p.goodsPromo
       newRows.push({ ...auto, hidden: false, needs_review: review })
     } else if (known.get(p.code).manual) {
-      manualRows.push(base)
-    } else {
+      if (changed(base, known.get(p.code))) manualRows.push(base)
+    } else if (changed(auto, known.get(p.code))) {
       autoRows.push(auto)
     }
   }
@@ -164,7 +178,12 @@ export async function savePosts(account, posts, works) {
   if (newRows.length) check('게시물 저장', await db.from('posts').upsert(newRows))
   if (autoRows.length) check('게시물 저장', await db.from('posts').upsert(autoRows))
   if (manualRows.length) check('게시물 저장', await db.from('posts').upsert(manualRows))
-  return { total: classified.length, added: classified.filter((p) => !known.has(p.code)).length, imagesUploaded }
+  return {
+    total: classified.length,
+    added: newRows.length,
+    updated: autoRows.length + manualRows.length,
+    imagesUploaded,
+  }
 }
 
 // 인스타 프로필(이름·소개글·링크·사진) 저장. 사진은 일주일에 한 번만 다시 올림

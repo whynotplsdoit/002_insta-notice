@@ -1,6 +1,6 @@
 // 소식 카드: 누르면 상세 창이 열림. 매장 이름(ⓘ)은 매장 정보 창
 import { useState } from 'react'
-import { imageUrl } from './supabase.js'
+import { imageUrl, thumbUrl } from './supabase.js'
 import { bodyOf, dateRange, timeAgo, titleOf } from './format.js'
 import { scheduleLabel } from './sort.js'
 
@@ -8,12 +8,14 @@ const MAX_WORKS = 3
 
 export default function PostCard({ post, now, shopName, showBranch, isNew, fav = false, onOpen, onShopClick }) {
   const [imgFailed, setImgFailed] = useState(false)
+  const [thumbFailed, setThumbFailed] = useState(false) // 작은 사진이 없으면 큰 사진으로
   const title = titleOf(post.caption)
   const body = bodyOf(post.caption, title)
   const when = dateRange(post.starts_at, post.ends_at)
   const label = scheduleLabel(post, now)
   const past = label?.kind === 'past'
-  const src = imageUrl(post.image_path)
+  const thumb = thumbUrl(post.image_path)
+  const src = thumb && !thumbFailed ? thumb : imageUrl(post.image_path)
   const extraWorks = post.works.length - MAX_WORKS
 
   // 카드 아무 곳이나 누르면 상세 (매장 이름 버튼은 따로)
@@ -33,7 +35,7 @@ export default function PostCard({ post, now, shopName, showBranch, isNew, fav =
     >
       <div className="card-media">
         {src && !imgFailed ? (
-          <img src={src} alt="" loading="lazy" decoding="async" onError={() => setImgFailed(true)} />
+          <img src={src} alt="" loading="lazy" decoding="async" onError={() => (src === thumb ? setThumbFailed(true) : setImgFailed(true))} />
         ) : (
           <div className="card-noimg">사진 없음</div>
         )}

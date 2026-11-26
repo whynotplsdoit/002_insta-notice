@@ -1,6 +1,6 @@
 // 매장 관리: 이름·종류·수집 간격·숨기기·고정 해시태그·지점 수정, 삭제
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../supabase.js'
+import { supabase, withThumbs } from '../supabase.js'
 import { ACCOUNT_TYPES, ago, fromList, toList } from './util.js'
 
 // 네이버 지도 링크에서 장소 번호 뽑기 (map.naver.com/p/entry/place/123…, m.place.naver.com/place/123, 숫자만)
@@ -143,7 +143,7 @@ function ShopEditor({ shop, branches, onSaved, onDeleted }) {
     const { data: pics, error: pe } = await supabase.from('posts').select('image_path').eq('account_username', shop.username).not('image_path', 'is', null)
     if (pe) return alert(`삭제하지 못했습니다: ${pe.message}`)
     const { data: acct } = await supabase.from('accounts').select('profile_image_path').eq('username', shop.username).maybeSingle()
-    const paths = [...pics.map((p) => p.image_path), acct?.profile_image_path].filter(Boolean)
+    const paths = [...withThumbs(pics.map((p) => p.image_path)), acct?.profile_image_path].filter(Boolean)
     for (let i = 0; i < paths.length; i += 100) {
       const { error: se } = await supabase.storage.from('post-images').remove(paths.slice(i, i + 100))
       if (se) return alert(`사진을 지우지 못해 멈췄습니다: ${se.message}`)

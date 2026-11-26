@@ -4,13 +4,19 @@ import sharp from 'sharp'
 
 export const POST_WIDTH = 720
 export const PROFILE_WIDTH = 200
+export const THUMB_WIDTH = 400 // 목록 카드용 작은 사진
+
+// 목록용 작은 사진 경로: 아이디/코드.webp → 아이디/코드.t.webp (사이트 web/src/supabase.js 와 같은 규칙)
+export const thumbPath = (path) => (path?.endsWith('.webp') ? path.replace(/\.webp$/, '.t.webp') : null)
+// 사진 지울 때 작은 사진도 같이
+export const withThumbs = (paths) => paths.filter(Boolean).flatMap((p) => [p, thumbPath(p)].filter(Boolean))
 
 // 이미지 버퍼 → 줄인 webp 버퍼. 원본보다 작으면 키우지 않음
 export async function shrinkImage(buffer, width = POST_WIDTH) {
   return sharp(buffer, { failOn: 'none' })
     .rotate() // 사진 방향 정보 반영
     .resize({ width, height: width, fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 72, effort: 4 })
+    .webp({ quality: width <= THUMB_WIDTH ? 68 : 72, effort: 4 })
     .toBuffer()
 }
 

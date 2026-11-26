@@ -10,6 +10,7 @@
 // 기록 정리: 수집 기록(crawl_logs) 30일, 삭제 기록(deleted_posts) 1년, 사용 행동 기록(events) 180일,
 //           추가 완료·거절된 매장 신청(shop_requests)·스팸함 의견(feedback status=spam) 30일 지나면 지움.
 import { db } from './db.mjs'
+import { withThumbs } from './shrink.mjs'
 
 export const MAX_KEEP_MONTHS = 3 // 모든 글 최대 게시 기간
 export const EVENT_KEEP_DAYS = 7 // 종료일 이후 보관 기간
@@ -101,8 +102,8 @@ export async function deleteExpiredPosts(now = Date.now()) {
   await recordDeleted(expired)
 
   // 2) 사진 삭제 (실패해도 글 삭제는 진행)
-  const paths = expired.map((p) => p.image_path).filter(Boolean)
-  if (paths.length) await db.storage.from('post-images').remove(paths)
+  const paths = withThumbs(expired.map((p) => p.image_path))
+  for (let i = 0; i < paths.length; i += 100) await db.storage.from('post-images').remove(paths.slice(i, i + 100))
 
   // 3) 글 삭제
   const del = await db.from('posts').delete().in('code', expired.map((p) => p.code))

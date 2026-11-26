@@ -521,7 +521,7 @@ export async function act(action, value, db) {
       if (!post) return { done: '이미 삭제된 글입니다.', list: 'review' }
       // 관리자 화면과 같은 순서: 다시 수집되지 않게 기록 → 사진 → 글
       must(await db.from('deleted_posts').upsert({ code: post.code, account_username: post.account_username }, { onConflict: 'code', ignoreDuplicates: true }))
-      if (post.image_path) await db.storage.from('post-images').remove([post.image_path])
+      if (post.image_path) await db.storage.from('post-images').remove([post.image_path, post.image_path.replace(/.webp$/, '.t.webp')])
       must(await db.from('posts').delete().eq('code', post.code))
       return { done: '🗑 글을 삭제했습니다.', list: 'review' }
     }

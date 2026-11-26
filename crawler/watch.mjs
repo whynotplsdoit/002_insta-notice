@@ -188,7 +188,7 @@ try {
       await saveProfile(username, posts.profile).catch(() => {}) // 프로필 저장 실패는 수집을 멈추지 않음
       await markCrawled(username)
       const why = stale?.username === username ? ' (정기 확인)' : ''
-      await log(`✓ ${account.displayName}${why}: 새 글 ${r.added}개, 사진 ${r.imagesUploaded}장`, { account: username })
+      await log(`✓ ${account.displayName}${why}: 새 글 ${r.added}개, 바뀐 글 ${r.updated}개, 사진 ${r.imagesUploaded}장`, { account: username })
     } catch (err) {
       if (err instanceof LoginRequiredError) throw err
       failed++
