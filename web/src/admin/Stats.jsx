@@ -85,6 +85,46 @@ export default function Stats() {
       .then(({ data }) => setNames(new Map((data ?? []).map((a) => [a.username, a.display_name]))))
   }, [])
 
+  // 즐겨찾기 기록 (기간과 상관없이 보관 중인 전체 180일): 방문자마다 매장별 마지막 상태(추가/해제)
+  const [favRows, setFavRows] = useState(null)
+  useEffect(() => {
+    ;(async () => {
+      const all = []
+      for (let from = 0; from < MAX_ROWS; from += PAGE) {
+        const { data, error: err } = await supabase
+          .from('events')
+          .select('created_at, visitor_id, meta')
+          .eq('type', 'filter')
+          .eq('target', 'favorite')
+          .order('created_at', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (err) return setFavRows([])
+        all.push(...data)
+        if (data.length < PAGE) break
+      }
+      setFavRows(all)
+    })()
+  }, [])
+
+  const favs = useMemo(() => {
+    if (!favRows) return null
+    const since = Date.now() - days * DAY
+    const last = new Map() // "방문자|매장" → 마지막 상태
+    const shop = new Map() // 매장 → { now, added, removed } (added/removed 는 고른 기간 안)
+    const get = (u) => shop.get(u) ?? shop.set(u, { now: 0, added: 0, removed: 0 }).get(u)
+    for (const r of favRows) {
+      const u = r.meta?.value
+      if (!u) continue
+      last.set(`${r.visitor_id}|${u}`, r.meta?.on !== false)
+      if (new Date(r.created_at).getTime() >= since) get(u)[r.meta?.on === false ? 'removed' : 'added']++
+    }
+    for (const [key, on] of last) if (on) get(key.split('|')[1]).now++
+    return [...shop]
+      .map(([u, o]) => ({ u, ...o }))
+      .filter((r) => r.now || r.added || r.removed)
+      .sort((a, b) => b.now - a.now || b.added - a.added)
+  }, [favRows, days])
+
   const s = useMemo(() => {
     if (!rows) return null
     const visits = rows.filter((r) => r.type === 'visit')
@@ -123,8 +163,13 @@ export default function Stats() {
       posts: count(byType('insta_click'), (r) => r.target).slice(0, 10),
       searches: count(byType('search'), (r) => r.target.toLowerCase()).slice(0, 15),
       features: count(rows.filter((r) => r.type !== 'visit'), (r) => r.type),
-      filters: count(byType('filter').filter((r) => r.meta?.on !== false), (r) =>
-        r.target === 'hide_past' ? '끝난 행사 숨기기' : `${{ type: '종류', region: '지역', shop: '매장' }[r.target] ?? r.target}: ${r.meta?.value === 'all' ? '전체' : names.get(r.meta?.value) ?? r.meta?.value}`,
+      // 즐겨찾기 추가·해제는 위 "즐겨찾기 인기 매장"에서 따로 봄
+      filters: count(byType('filter').filter((r) => r.meta?.on !== false && r.target !== 'favorite'), (r) =>
+        r.target === 'hide_past'
+          ? '끝난 행사 숨기기'
+          : r.target === 'favorite_only'
+            ? '즐겨찾기 매장 소식만'
+            : `${{ type: '종류', region: '지역', shop: '매장', shop_type: '매장 탭 종류', shop_area: '매장 탭 지역', shop_section: '매장 탭 펼치기' }[r.target] ?? r.target}: ${r.meta?.value === 'all' ? '전체' : names.get(r.meta?.value) ?? r.meta?.value}`,
       ).slice(0, 10),
       tabs: count(byType('tab'), (r) => r.target),
     }
@@ -211,6 +256,40 @@ export default function Stats() {
                 </tbody>
               </table>
             )}
+          </section>
+
+          <section className="a-card a-pad">
+            <h3 className="a-h3">즐겨찾기 인기 매장</h3>
+            {!favs ? (
+              <p className="a-empty">불러오는 중…</p>
+            ) : favs.length === 0 ? (
+              <p className="a-empty">아직 즐겨찾기 기록이 없습니다.</p>
+            ) : (
+              <table className="a-table">
+                <thead>
+                  <tr>
+                    <th>매장</th>
+                    <th>지금 즐겨찾기</th>
+                    <th>추가 ({PERIODS.find((p) => p.days === days)?.label})</th>
+                    <th>해제 ({PERIODS.find((p) => p.days === days)?.label})</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {favs.map((r) => (
+                    <tr key={r.u}>
+                      <td>{names.get(r.u) ?? r.u}</td>
+                      <td className="a-strong">{r.now}명</td>
+                      <td>{r.added}</td>
+                      <td>{r.removed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="a-muted a-small-text">
+              "지금 즐겨찾기"는 브라우저마다 마지막으로 누른 상태(추가/해제)로 센 사람 수입니다. 예전 필터에서 옮겨진 즐겨찾기와 브라우저 기록을
+              지운 경우는 셀 수 없어서 실제보다 조금 다를 수 있습니다.
+            </p>
           </section>
 
           <section className="a-card a-pad">
