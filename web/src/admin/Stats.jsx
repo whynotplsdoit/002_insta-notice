@@ -25,6 +25,13 @@ const count = (arr, keyFn) => {
   }
   return [...m].sort((a, b) => b[1] - a[1])
 }
+
+// 탭 기록 이름 → 보기 쉬운 이름 ("map" 은 예전 지도 탭 이름을 그대로 쓰는 매장 탭)
+const TAB_LABELS = {
+  map: '매장',
+  'shops:list': '매장 › 목록 보기',
+  'shops:map': '매장 › 지도 보기',
+}
 const uniq = (arr, keyFn) => new Set(arr.map(keyFn)).size
 
 const FEATURE_LABELS = {
@@ -171,7 +178,7 @@ export default function Stats() {
             ? '즐겨찾기 매장 소식만'
             : `${{ type: '종류', region: '지역', shop: '매장', shop_type: '매장 탭 종류', shop_area: '매장 탭 지역', shop_section: '매장 탭 펼치기' }[r.target] ?? r.target}: ${r.meta?.value === 'all' ? '전체' : names.get(r.meta?.value) ?? r.meta?.value}`,
       ).slice(0, 10),
-      tabs: count(byType('tab'), (r) => r.target),
+      tabs: count(byType('tab'), (r) => TAB_LABELS[r.target] ?? r.target),
     }
   }, [rows, days, names])
 
