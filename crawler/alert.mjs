@@ -1,4 +1,5 @@
 // 관리자 알림 보내기: 설정된 곳 모두로 (카카오톡 나에게 보내기, 슬랙 채널)
+// 카톡은 지금 꺼 둠 (kakao.mjs KAKAO_ALERTS_ON) → 슬랙만 보냄
 // - 카톡: .env KAKAO_REST_API_KEY + npm run kakao:login 으로 연결했을 때
 // - 슬랙: .env SLACK_WEBHOOK_URL 이 있을 때
 // 모든 알림 맨 앞에 [굿즈레이더] 를 붙입니다.

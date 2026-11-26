@@ -114,7 +114,9 @@ export async function kakaoDaysLeft() {
   return Math.floor((t.refresh_expires_at - Date.now()) / 86400000)
 }
 
-export const kakaoConfigured = () => Boolean(process.env.KAKAO_REST_API_KEY)
+// 카톡 알림 끔 (2026-11-26 사용자 결정: 알림은 슬랙만). 다시 켜려면 true
+export const KAKAO_ALERTS_ON = false
+export const kakaoConfigured = () => KAKAO_ALERTS_ON && Boolean(process.env.KAKAO_REST_API_KEY)
 
 // 카톡 "나와의 채팅"으로 보내기. 모든 알림 맨 앞에 [굿즈레이더] 를 붙임
 // url 을 주면 [굿즈레이더 열기] 버튼이 그 주소로 연결
