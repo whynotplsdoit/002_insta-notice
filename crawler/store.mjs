@@ -4,6 +4,7 @@ import fs from 'node:fs/promises'
 import { db } from './db.mjs'
 import { classifyPosts } from './classify.mjs'
 import { hasNoCaption, loadDeletedCodes, recordDeleted } from './cleanup.mjs'
+import { CACHE_SECONDS, POST_WIDTH, PROFILE_WIDTH, shrinkImage } from './shrink.mjs'
 
 const BUCKET = 'post-images'
 
@@ -73,19 +74,19 @@ export async function pushConfigFiles() {
   return { accounts, works }
 }
 
-// 인스타 사진을 받아서 우리 저장소에 올림. 실패하면 null (다음 수집 때 다시 시도)
-async function uploadImage(username, code, imageUrl) {
+// 인스타 사진을 받아서 작게 줄인 뒤(webp) 우리 저장소에 올림. 실패하면 null (다음 수집 때 다시 시도)
+async function uploadImage(username, code, imageUrl, width = POST_WIDTH) {
   if (!imageUrl) return null
   try {
     const res = await fetch(imageUrl)
     if (!res.ok) return null
     const type = res.headers.get('content-type') ?? 'image/jpeg'
     if (!type.startsWith('image/')) return null
-    const ext = type.includes('webp') ? 'webp' : type.includes('png') ? 'png' : 'jpg'
-    const path = `${username}/${code}.${ext}`
+    const small = await shrinkImage(Buffer.from(await res.arrayBuffer()), width)
+    const path = `${username}/${code}.webp`
     const { error } = await db.storage
       .from(BUCKET)
-      .upload(path, Buffer.from(await res.arrayBuffer()), { contentType: type, upsert: true })
+      .upload(path, small, { contentType: 'image/webp', upsert: true, cacheControl: CACHE_SECONDS })
     return error ? null : path
   } catch {
     return null
@@ -181,7 +182,7 @@ export async function saveProfile(username, profile) {
     !cur.profile_updated_at ||
     Date.now() - new Date(cur.profile_updated_at).getTime() > PROFILE_IMAGE_DAYS * 86400000
   if (stale && profile.profilePicUrl) {
-    const path = await uploadImage('_profiles', username, profile.profilePicUrl)
+    const path = await uploadImage('_profiles', username, profile.profilePicUrl, PROFILE_WIDTH)
     if (path) {
       row.profile_image_path = path
       row.profile_updated_at = new Date().toISOString()

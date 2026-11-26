@@ -15,12 +15,14 @@
     "shops": "node --env-file=.env crawler/shops.mjs",
     "setup:admin": "node --env-file=.env crawler/setup-admin.mjs",
     "naver": "node --env-file=.env crawler/naver-sync.mjs",
-    "kakao:login": "node --env-file=.env crawler/kakao-login.mjs"
+    "kakao:login": "node --env-file=.env crawler/kakao-login.mjs",
+    "shrink:images": "node --env-file=.env crawler/shrink-existing.mjs"
   },
   "devDependencies": {
     "playwright": "^1.65.1"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.119.2"
+    "@supabase/supabase-js": "^2.119.2",
+    "sharp": "^0.35.5"
   }
 }
