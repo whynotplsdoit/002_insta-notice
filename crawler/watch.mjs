@@ -92,10 +92,10 @@ try {
       const base = { auto_checked_at: stamp, auto_note: r.note.slice(0, 500) }
       const row =
         r.decision === 'approve'
-          ? { ...base, status: 'approved', auto_approved: true, reviewed_at: stamp, display_name: r.displayName, region: r.region, account_type: '굿즈샵', naver_place_id: r.naverPlaceId }
+          ? { ...base, status: 'approved', auto_approved: true, reviewed_at: stamp, display_name: r.displayName, region: r.region, account_type: r.accountType ?? '굿즈샵', naver_place_id: r.naverPlaceId }
           : r.decision === 'reject'
             ? { ...base, status: 'rejected', reviewed_at: stamp, result: `자동 거절: ${r.note}`.slice(0, 500) }
-            : { ...base, naver_place_id: r.naverPlaceId, display_name: r.displayName ?? req.display_name, region: r.region ?? req.region }
+            : { ...base, naver_place_id: r.naverPlaceId, account_type: req.account_type ?? r.accountType, display_name: r.displayName ?? req.display_name, region: r.region ?? req.region }
       const u = await db.from('shop_requests').update(row).eq('id', req.id)
       if (u.error) throw new Error(u.error.message)
       const label = { approve: '자동 승인', reject: '자동 거절', manual: '관리자 확인 필요' }[r.decision]

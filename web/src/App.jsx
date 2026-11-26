@@ -11,6 +11,7 @@ import InstallPrompt from './InstallPrompt.jsx'
 import { track } from './track.js'
 import { BoxIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
 import MapView from './MapView.jsx'
+import ShopList from './ShopList.jsx'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
 const SORTS = [
@@ -23,7 +24,7 @@ const TABS = [
   { id: '입고', label: '입고', Icon: BoxIcon },
   { id: '콜라보·팝업', label: '콜라보·팝업', Icon: StoreIcon },
   { id: '이벤트·안내', label: '이벤트·안내', Icon: MegaphoneIcon },
-  { id: 'map', label: '지도', Icon: MapPinIcon }, // 글 목록 대신 매장 지도
+  { id: 'map', label: '매장', Icon: MapPinIcon }, // 글 목록 대신 매장 [목록 | 지도] (예전 저장값과 맞추려고 id 는 map 유지)
 ]
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
 const STORAGE_KEY = 'goods-feed:filters:v2'
@@ -92,6 +93,7 @@ function Feed() {
   const [shopInfo, setShopInfo] = useState(null) // { username, branches: 글에 적힌 지점 }
   const [detail, setDetail] = useState(null) // 상세 창에 연 글
   const [sortMode, setSortMode] = useState(saved.sortMode === 'posted' ? 'posted' : 'schedule')
+  const [shopView, setShopView] = useState(saved.shopView === 'map' ? 'map' : 'list') // 매장 탭: 목록 | 지도
   const [now, setNow] = useState(Date.now())
 
   // 자정이 지나도 "오늘" 기준이 맞도록 1분마다 현재 시각 갱신
@@ -102,11 +104,11 @@ function Feed() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tab, types, regions, shops, hidePast, sortMode }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tab, types, regions, shops, hidePast, sortMode, shopView }))
     } catch {
       // 저장 못 해도 괜찮음
     }
-  }, [tab, types, regions, shops, hidePast, sortMode])
+  }, [tab, types, regions, shops, hidePast, sortMode, shopView])
 
   // 검색어 기록: 입력을 멈추고 1.5초 지나면 한 번 (2글자 이상)
   useEffect(() => {
@@ -435,7 +437,7 @@ function Feed() {
               onClick={() => selectTab(t.id)}
             >
               {t.label}
-              {t.id !== 'map' && <span className="count">{counts[t.id] ?? 0}</span>}
+              <span className="count">{t.id === 'map' ? accounts.length : counts[t.id] ?? 0}</span>
             </button>
           ))}
         </nav>
@@ -462,6 +464,44 @@ function Feed() {
         <main className="main">
           {status === 'loading' && <div className="state">불러오는 중…</div>}
           {status === 'ready' && isMap && (
+            <div className="shop-view-switch">
+              <div className="segmented" role="group" aria-label="매장 보기 방식">
+                {[
+                  { id: 'list', label: '목록' },
+                  { id: 'map', label: '지도' },
+                ].map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={shopView === v.id ? 'on' : ''}
+                    aria-pressed={shopView === v.id}
+                    onClick={() => {
+                      setShopView(v.id)
+                      track('tab', `shops:${v.id}`)
+                    }}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {status === 'ready' && isMap && shopView === 'list' && (
+            <ShopList
+              accounts={accounts}
+              branches={branches}
+              posts={posts}
+              regions={regions}
+              shops={shops}
+              query={query}
+              now={now}
+              onShopOpen={(username) => {
+                setShopInfo({ username, branches: [] })
+                track('shop_open', username, { from: 'list' })
+              }}
+            />
+          )}
+          {status === 'ready' && isMap && shopView === 'map' && (
             <MapView
               branches={mapBranches}
               shopOf={shopOf}

@@ -146,6 +146,10 @@ export async function reviewRequest(ig, naver, req, { registered, canAutoAdd, kn
     // 지역은 네이버 주소로만 정함 (신청자가 적은 "서울" 같은 값은 검색 참고만, 신청 창에서는 칸을 뺌)
     region: (regionFromAddress(p?.roadAddress ?? p?.address, knownBranches) || '').slice(0, 20) || null,
     naverPlaceId: placeOk ? p.id : null,
+    // 가챠샵: 네이버 업종(오락실·뽑기)이나 이름에 가챠가 있으면
+    accountType: /가챠|가차|ガチャ|gacha|뽑기|캡슐토이|오락실/i.test(`${p?.name ?? ''} ${p?.category ?? ''} ${acc.fullName ?? ''} ${req.username}`)
+      ? '가챠샵'
+      : '굿즈샵',
   }
 
   const goodsOk = goodsPosts >= MIN_GOODS_POSTS || (bioHit && goodsPosts >= 2)

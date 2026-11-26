@@ -35,4 +35,4 @@ export const fromKstDate = (d) => (d ? new Date(`${d}T00:00:00+09:00`).toISOStri
 
 export const CATEGORIES = ['입고', '콜라보·팝업', '이벤트·안내', '기타']
 export const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
-export const ACCOUNT_TYPES = ['굿즈샵', '콜라보카페']
+export const ACCOUNT_TYPES = ['굿즈샵', '가챠샵', '콜라보카페']
