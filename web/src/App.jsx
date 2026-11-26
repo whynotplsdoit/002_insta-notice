@@ -12,6 +12,8 @@ import { track } from './track.js'
 import { BoxIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
 import MapView from './MapView.jsx'
 import ShopList from './ShopList.jsx'
+import { useFavorites } from './favorites.jsx'
+import { groupRegions } from './regions.js'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
 const SORTS = [
@@ -59,8 +61,12 @@ function Feed() {
   const [tab, setTab] = useState(saved.tab ?? '전체')
   const [types, setTypes] = useState(saved.types ?? [])
   const [regions, setRegions] = useState(saved.regions ?? [])
-  // 고른 매장: null 이면 전체, 배열이면 그 매장만 (빈 배열 = 하나도 안 고름)
-  const [shops, setShops] = useState(Array.isArray(saved.shops) && saved.shops.length ? saved.shops : null)
+  // 즐겨찾기 매장 (이 브라우저에만 저장) + "즐겨찾기 매장 소식만" 켜기
+  // 예전 필터에서 매장을 골라 둔 사람은 그 매장이 즐겨찾기로 옮겨지고 켜진 상태로 시작
+  const { favorites, isFav, toggleFav } = useFavorites()
+  const [favOnly, setFavOnly] = useState(saved.favOnly ?? (Array.isArray(saved.shops) && saved.shops.length > 0))
+  const [openSido, setOpenSido] = useState(null) // 지역 필터에서 펼친 시·도
+  const [toast, setToast] = useState('')
   const [query, setQuery] = useState('')
   const [hidePast, setHidePast] = useState(saved.hidePast ?? false)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -104,11 +110,33 @@ function Feed() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tab, types, regions, shops, hidePast, sortMode, shopView }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tab, types, regions, favOnly, hidePast, sortMode, shopView }))
     } catch {
       // 저장 못 해도 괜찮음
     }
-  }, [tab, types, regions, shops, hidePast, sortMode, shopView])
+  }, [tab, types, regions, favOnly, hidePast, sortMode, shopView])
+
+  // 별 누르기: 처음 추가할 때 한 번 "이 브라우저에 저장돼요" 안내
+  const toastTimer = useRef(null)
+  const onToggleFav = (username) => {
+    const on = toggleFav(username)
+    track('filter', 'favorite', { value: username, on })
+    let first = false
+    try {
+      first = on && !localStorage.getItem('goods-radar:fav-tip')
+      if (first) localStorage.setItem('goods-radar:fav-tip', '1')
+    } catch {
+      first = false
+    }
+    setToast(on ? (first ? '즐겨찾기에 추가했어요 · 이 브라우저에 저장돼요' : '즐겨찾기에 추가했어요') : '즐겨찾기에서 뺐어요')
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(''), first ? 3500 : 1800)
+  }
+  const goShops = () => {
+    setFiltersOpen(false)
+    setShopView('list')
+    selectTab('map')
+  }
 
   // 검색어 기록: 입력을 멈추고 1.5초 지나면 한 번 (2글자 이상)
   useEffect(() => {
@@ -129,13 +157,8 @@ function Feed() {
     for (const b of branches) m.set(`${b.account_username}/${b.name}`, b.region)
     return m
   }, [branches])
-  const allRegions = useMemo(() => [...new Set(branches.map((b) => b.region).filter(Boolean))], [branches])
-  const sortedShops = useMemo(
-    () => accounts.slice().sort((a, b) => a.display_name.localeCompare(b.display_name, 'ko')),
-    [accounts],
-  )
-  const regionsOfShop = (username) =>
-    [...new Set(branches.filter((b) => b.account_username === username).map((b) => b.region))].join('·')
+  // 지역을 시·도로 묶기: [['서울', ['홍대', '잠실']], ['부산', ['부산']], ...] (매장 많은 시·도부터)
+  const regionGroups = useMemo(() => groupRegions(branches), [branches])
   const postCountOf = useMemo(() => {
     const m = new Map()
     for (const p of posts) m.set(p.account_username, (m.get(p.account_username) ?? 0) + 1)
@@ -153,7 +176,7 @@ function Feed() {
     return posts.filter((p) => {
       if (tab === '전체' ? false : p.category !== tab) return false
       if (tab === '입고' && types.length && !p.goods_type.some((t) => types.includes(t))) return false
-      if (shops !== null && !shops.includes(p.account_username)) return false
+      if (favOnly && !favorites.includes(p.account_username)) return false
       if (regions.length && !postRegions(p).some((r) => regions.includes(r))) return false
       if (hidePast && p.starts_at && scheduleOf(p, now).group === 'past') return false
       if (q) {
@@ -166,7 +189,7 @@ function Feed() {
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts, tab, types, regions, shops, query, hidePast, shopOf, regionOf])
+  }, [posts, tab, types, regions, favOnly, favorites, query, hidePast, shopOf, regionOf])
 
   const sorted = useMemo(
     () => (sortMode === 'posted' ? sortByPosted(visible) : sortBySchedule(visible, now)),
@@ -179,9 +202,9 @@ function Feed() {
   const mapBranches = useMemo(
     () =>
       branches.filter(
-        (b) => (shops === null || shops.includes(b.account_username)) && (regions.length === 0 || regions.includes(b.region)),
+        (b) => regions.length === 0 || regions.includes(b.region),
       ),
-    [branches, shops, regions],
+    [branches, regions],
   )
 
   // 구역별 개수 (오늘·진행 중 / 앞으로 예정 / 지난 소식)
@@ -202,7 +225,7 @@ function Feed() {
   const [shown, setShown] = useState(PAGE_SIZE)
   useEffect(() => {
     setShown(PAGE_SIZE)
-  }, [tab, types, regions, shops, query, hidePast, sortMode])
+  }, [tab, types, regions, favOnly, query, hidePast, sortMode])
   const page = list.slice(0, shown)
 
   // 목록 끝(더 보기 자리)이 화면에 가까워지면 자동으로 다음 30개
@@ -239,22 +262,12 @@ function Feed() {
 
   const toggle = (list, setList, value) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value])
-  const activeFilters = types.length + regions.length + (shops !== null ? 1 : 0) + (hidePast ? 1 : 0)
-
-  // 매장 하나 켜고 끄기: 모두 켜지면 다시 "전체"로
-  const toggleShop = (username) => {
-    const all = sortedShops.map((a) => a.username)
-    const current = shops ?? all
-    const on = !current.includes(username)
-    const next = on ? [...current, username] : current.filter((u) => u !== username)
-    setShops(next.length === all.length ? null : next)
-    track('filter', 'shop', { value: username, on })
-  }
+  const activeFilters = types.length + regions.length + (favOnly ? 1 : 0) + (hidePast ? 1 : 0)
 
   const resetFilters = () => {
     setTypes([])
     setRegions([])
-    setShops(null)
+    setFavOnly(false)
     setHidePast(false)
     setQuery('')
   }
@@ -295,65 +308,104 @@ function Feed() {
         </fieldset>
       )}
       <fieldset>
-        <legend>지역</legend>
-        <div className="chips">
-          {allRegions.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={`chip${regions.includes(r) ? ' on' : ''}`}
-              aria-pressed={regions.includes(r)}
-              onClick={() => {
-                toggle(regions, setRegions, r)
-                track('filter', 'region', { value: r, on: !regions.includes(r) })
-              }}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset>
         <legend>
-          매장{' '}
-          <span className="legend-note">
-            {shops === null ? '전체' : `${shops.length}/${sortedShops.length}곳`}
-          </span>
+          지역{' '}
+          {regions.length > 0 && <span className="legend-note">{regions.join('·')}</span>}
         </legend>
-        <ul className="shop-list">
-          <li>
-            <label className={`shop-item shop-all${shops === null ? ' on' : ''}`}>
-              <input
-                type="checkbox"
-                checked={shops === null}
-                ref={(el) => el && (el.indeterminate = shops !== null && shops.length > 0)}
-                onChange={() => {
-                  setShops(shops === null ? [] : null)
-                  track('filter', 'shop', { value: 'all', on: shops !== null })
-                }}
-              />
-              <span className="shop-info">
-                <span className="shop-name">전체 매장</span>
-              </span>
-              <span className="shop-count">{posts.length}</span>
-            </label>
-          </li>
-          {sortedShops.map((a) => {
-            const on = shops === null || shops.includes(a.username)
+        {/* 시·도로 묶음: 지역이 하나뿐인 시·도는 바로 고르고, 여러 곳이면 펼쳐서 고름 */}
+        <div className="chips">
+          {regionGroups.map(([sido, list]) => {
+            const picked = list.filter((r) => regions.includes(r)).length
+            const single = list.length === 1
+            const on = single ? picked === 1 : picked === list.length
             return (
-              <li key={a.username}>
-                <label className={`shop-item${on ? ' on' : ''}`}>
-                  <input type="checkbox" checked={on} onChange={() => toggleShop(a.username)} />
-                  <span className="shop-info">
-                    <span className="shop-name">{a.display_name}</span>
-                    <span className="shop-region">{regionsOfShop(a.username)}</span>
-                  </span>
-                  <span className="shop-count">{postCountOf.get(a.username) ?? 0}</span>
-                </label>
-              </li>
+              <button
+                key={sido}
+                type="button"
+                className={`chip${on ? ' on' : picked ? ' partial' : ''}${openSido === sido ? ' open' : ''}`}
+                aria-pressed={single ? on : undefined}
+                aria-expanded={single ? undefined : openSido === sido}
+                onClick={() => {
+                  if (single) {
+                    toggle(regions, setRegions, list[0])
+                    track('filter', 'region', { value: list[0], on: !regions.includes(list[0]) })
+                  } else setOpenSido(openSido === sido ? null : sido)
+                }}
+              >
+                {single ? list[0] : sido}
+                {!single && (picked ? ` ${picked}` : ' ▾')}
+              </button>
             )
           })}
-        </ul>
+        </div>
+        {openSido && (
+          <div className="chips sub-chips">
+            {(() => {
+              const list = regionGroups.find(([s]) => s === openSido)?.[1] ?? []
+              const all = list.every((r) => regions.includes(r))
+              return [
+                <button
+                  key="all"
+                  type="button"
+                  className={`chip${all ? ' on' : ''}`}
+                  onClick={() => {
+                    setRegions(all ? regions.filter((r) => !list.includes(r)) : [...new Set([...regions, ...list])])
+                    track('filter', 'region', { value: `${openSido} 전체`, on: !all })
+                  }}
+                >
+                  {openSido} 전체
+                </button>,
+                ...list.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={`chip${regions.includes(r) ? ' on' : ''}`}
+                    aria-pressed={regions.includes(r)}
+                    onClick={() => {
+                      toggle(regions, setRegions, r)
+                      track('filter', 'region', { value: r, on: !regions.includes(r) })
+                    }}
+                  >
+                    {r}
+                  </button>
+                )),
+              ]
+            })()}
+          </div>
+        )}
+      </fieldset>
+      <fieldset>
+        <legend>즐겨찾기 매장</legend>
+        <label className={`check fav-only${favOnly ? ' on' : ''}`}>
+          <input
+            type="checkbox"
+            checked={favOnly}
+            onChange={(e) => {
+              setFavOnly(e.target.checked)
+              track('filter', 'favorite_only', { on: e.target.checked })
+            }}
+          />
+          ★ 즐겨찾기 매장 소식만
+        </label>
+        {favorites.length > 0 ? (
+          <ul className="fav-list">
+            {favorites.map((u) => (
+              <li key={u}>
+                <span>{shopOf.get(u)?.display_name ?? u}</span>
+                <button type="button" aria-label={`${shopOf.get(u)?.display_name ?? u} 즐겨찾기 해제`} onClick={() => onToggleFav(u)}>
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="fav-empty">
+            매장 탭이나 매장 정보 창의 ☆를 눌러 자주 가는 매장을 저장해 보세요.{' '}
+            <button type="button" className="link-btn" onClick={goShops}>
+              매장 보러 가기
+            </button>
+          </p>
+        )}
         <button
           type="button"
           className="add-shop"
@@ -492,7 +544,9 @@ function Feed() {
               branches={branches}
               posts={posts}
               regions={regions}
-              shops={shops}
+              isFav={isFav}
+              favCount={favorites.length}
+              onToggleFav={onToggleFav}
               query={query}
               now={now}
               onShopOpen={(username) => {
@@ -523,7 +577,16 @@ function Feed() {
           )}
           {listReady && visible.length === 0 && (
             <div className="state">
-              <p>{shops?.length === 0 ? '매장을 하나 이상 선택하세요.' : '조건에 맞는 소식이 없습니다.'}</p>
+              <p>
+                {favOnly && favorites.length === 0
+                  ? '즐겨찾기한 매장이 없어요. 매장 탭에서 ☆를 눌러 자주 가는 매장을 저장해 보세요.'
+                  : '조건에 맞는 소식이 없습니다.'}
+              </p>
+              {favOnly && favorites.length === 0 && (
+                <button type="button" className="btn" onClick={goShops}>
+                  매장 보러 가기
+                </button>
+              )}
               {(activeFilters > 0 || query) && (
                 <button type="button" className="btn" onClick={resetFilters}>
                   필터 초기화
@@ -581,6 +644,7 @@ function Feed() {
                     now={now}
                     shopName={shopOf.get(p.account_username)?.display_name ?? p.account_username}
                     showBranch={(branchCount.get(p.account_username) ?? 0) > 1}
+                    fav={isFav(p.account_username)}
                     isNew={now - new Date(p.first_seen_at).getTime() < NEW_MS && now - new Date(p.posted_at).getTime() < NEW_MS}
                     onOpen={() => {
                       setDetail(p)
@@ -670,6 +734,11 @@ function Feed() {
       )}
 
       {!isMap && !filtersOpen && <InstallPrompt />}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
 
       {requestOpen && <RequestShop accounts={accounts} onClose={() => setRequestOpen(false)} />}
       {feedbackOpen && (
@@ -683,6 +752,7 @@ function Feed() {
           post={posts.find((x) => x.code === detail.code) ?? detail}
           shop={shopOf.get(detail.account_username)}
           showBranch={(branchCount.get(detail.account_username) ?? 0) > 1}
+          fav={isFav(detail.account_username)}
           now={now}
           onClose={() => setDetail(null)}
           onShopOpen={() => {
@@ -700,6 +770,8 @@ function Feed() {
           posts={posts.filter((p) => p.account_username === shopInfo.username)}
           focusBranches={shopInfo.branches}
           now={now}
+          fav={isFav(shopInfo.username)}
+          onToggleFav={() => onToggleFav(shopInfo.username)}
           onClose={() => setShopInfo(null)}
         />
       )}

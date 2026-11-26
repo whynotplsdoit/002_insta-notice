@@ -1987,3 +1987,210 @@
 }.shop-card-meta.wrap {
   white-space: normal;
 }
+
+/* ---------- 즐겨찾기 ★ · 지역 시·도 묶음 · 안내 토스트 ---------- */
+.fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fav-btn.on {
+  color: var(--fav);
+}
+.fav-btn:hover {
+  background: var(--chip);
+}
+.shop-card-wrap {
+  position: relative;
+}
+.fav-btn.on-card {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+}
+.shop-card-wrap .shop-card {
+  padding-right: 44px;
+}
+.fav-btn.in-title {
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+  font-size: 20px;
+  vertical-align: -3px;
+}
+.chip.chip-fav {
+  font-weight: 700;
+}
+.chip.partial {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chip.open {
+  border-style: dashed;
+}
+.sub-chips {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--chip);
+}
+.fav-only.on {
+  color: var(--accent);
+  font-weight: 700;
+}
+.fav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fav-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+}
+.fav-list button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.fav-list button:hover {
+  background: var(--chip);
+}
+.fav-empty {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.fav-empty .link-btn {
+  color: var(--accent);
+  font-weight: 700;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  z-index: 60;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(20, 20, 40, 0.92);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}.fav-mark {
+  margin-right: 3px;
+  color: var(--fav);
+}
+
+/* 즐겨찾기 매장 글: 노란 테두리 + 왼쪽 세로줄 + 사진 위 "★ 내 매장" 배지 */
+.card-fav {
+  position: relative;
+  border-color: var(--fav);
+}
+.card-fav::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: 5px;
+  background: var(--fav);
+}
+.fav-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--fav);
+  color: #1f1f3a;
+  font-size: 12px;
+  font-weight: 800;
+}
+@media (max-width: 600px) {
+  .fav-badge {
+    bottom: 6px;
+    left: 8px;
+    padding: 1px 6px;
+    font-size: 11px;
+  }
+}.post-shop-text b .fav-mark {
+  font-weight: 800;
+  color: var(--fav);
+}
+
+/* 매장 탭: 지역 칩 · 시·도 묶음 */
+.area-chips .chip-count,
+.sub-chips .chip-count {
+  margin-left: 3px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.chip-near {
+  font-weight: 700;
+}
+.shop-section {
+  margin-top: 14px;
+}
+.shop-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--header-text);
+  font-size: 17px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+.shop-section-head .count {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--header-muted);
+}
+.shop-section-toggle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--header-muted);
+}
+.shop-section .sub-chips {
+  margin: 0 0 10px;
+}
+.shop-more {
+  display: block;
+  margin: 12px auto 0;
+}

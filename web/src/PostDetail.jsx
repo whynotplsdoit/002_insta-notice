@@ -8,7 +8,7 @@ import { track } from './track.js'
 import { useScrollLock } from './useScrollLock.js'
 import { useBackToClose } from './useBackToClose.js'
 
-export default function PostDetail({ post, shop, showBranch, now, onShopOpen, onClose }) {
+export default function PostDetail({ post, shop, showBranch, now, fav = false, onShopOpen, onClose }) {
   const dialogRef = useRef(null)
   const [imgFailed, setImgFailed] = useState(false)
   useScrollLock()
@@ -51,6 +51,11 @@ export default function PostDetail({ post, shop, showBranch, now, onShopOpen, on
             {photo ? <img src={photo} alt="" /> : <span className="post-shop-ph">{shop?.display_name?.[0] ?? '?'}</span>}
             <span className="post-shop-text">
               <b>
+                {fav && (
+                  <span className="fav-mark" title="즐겨찾기 매장" aria-label="즐겨찾기 매장">
+                    ★
+                  </span>
+                )}
                 {shop?.display_name ?? post.account_username}
                 {showBranch && post.branches.length > 0 && <span> · {post.branches.join(', ')}</span>}
               </b>

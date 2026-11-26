@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { imageUrl } from './supabase.js'
 import { hoursLines, openStatus, todayName } from './hours.js'
 import { track } from './track.js'
+import { FavButton } from './favorites.jsx'
 import { useScrollLock } from './useScrollLock.js'
 import { useBackToClose } from './useBackToClose.js'
 
@@ -16,7 +17,7 @@ function mapUrl(branch, shopName) {
   return `https://map.naver.com/p/search/${encodeURIComponent(q)}`
 }
 
-export default function ShopInfo({ account, branches, posts, focusBranches = [], now, onClose }) {
+export default function ShopInfo({ account, branches, posts, focusBranches = [], now, fav = false, onToggleFav, onClose }) {
   const dialogRef = useRef(null)
   useScrollLock() // 창이 열려 있는 동안 뒤 목록은 스크롤되지 않게
   useBackToClose(onClose) // 휴대폰 뒤로 가기로 닫기
@@ -66,7 +67,10 @@ export default function ShopInfo({ account, branches, posts, focusBranches = [],
         <header className="shop-head">
           {photo ? <img className="shop-photo" src={photo} alt="" /> : <div className="shop-photo placeholder">{account.display_name[0]}</div>}
           <div className="shop-head-text">
-            <h2 id="shop-title">{account.display_name}</h2>
+            <h2 id="shop-title">
+              {account.display_name}
+              {onToggleFav && <FavButton on={fav} onToggle={onToggleFav} name={account.display_name} className="in-title" />}
+            </h2>
             <a href={`https://www.instagram.com/${account.username}/`} target="_blank" rel="noopener noreferrer" className="shop-ig">
               @{account.username} ↗
             </a>
