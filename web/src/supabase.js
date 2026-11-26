@@ -16,7 +16,7 @@ export const imageUrl = (path) =>
   path && supabase ? supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl : null
 
 // 목록 카드용 작은 사진 (크롤러 crawler/shrink.mjs 와 같은 규칙: 코드.webp → 코드.t.webp)
-export const thumbPath = (path) => (path?.endsWith('.webp') ? path.replace(/.webp$/, '.t.webp') : null)
+export const thumbPath = (path) => (path?.endsWith('.webp') ? path.replace(/\.webp$/, '.t.webp') : null)
 export const thumbUrl = (path) => imageUrl(thumbPath(path))
 // 사진 지울 때 작은 사진도 같이
 export const withThumbs = (paths) => paths.filter(Boolean).flatMap((p) => [p, thumbPath(p)].filter(Boolean))
