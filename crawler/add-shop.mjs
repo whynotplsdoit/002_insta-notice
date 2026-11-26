@@ -18,9 +18,11 @@ export function detectFixedHashtags(posts) {
 
 // 반환: { account, followed, total, imagesUploaded }
 // naverPlaceId 가 있으면 지점에 연결 → 같은 실행 끝의 네이버 갱신에서 주소·영업시간·좌표를 채움
-export async function addShop(context, { username, displayName, region, accountType, intervalHours, naverPlaceId }, works) {
-  const { fullName, followed } = await followAccount(context, username)
+// follow: false 면 팔로우하지 않고 첫 수집만 (관리자가 휴대폰으로 직접 팔로우할 때. 팔로우 전에는 새 글이 안 들어옴)
+export async function addShop(context, { username, displayName, region, accountType, intervalHours, naverPlaceId, follow = true }, works) {
+  const { fullName: followName, followed } = follow ? await followAccount(context, username) : { fullName: null, followed: 'skipped' }
   const posts = await fetchAccount(context, username)
+  const fullName = followName ?? posts.profile?.fullName ?? null
   const account = {
     username,
     displayName: displayName || fullName || username,
