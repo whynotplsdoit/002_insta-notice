@@ -48,12 +48,16 @@ export function pickErrorAlerts(errors, state, now = Date.now()) {
 
 // watch.mjs 가 매번 끝날 때 호출
 // problems: { loginRequired: bool, errors: [문구] }  (매장 추가 완료는 알리지 않음)
-export async function notifyAdmin({ loginRequired = false, errors = [] } = {}, log = console.log) {
+export async function notifyAdmin({ loginRequired = false, searchLoginRequired = false, errors = [] } = {}, log = console.log) {
   if (!alertConfigured()) return
   const state = await loadState()
   try {
     if (loginRequired) {
       await once(state, 'ig-login', 1,'🚨 인스타 로그인이 풀려서 수집이 멈췄습니다.\nPC에서 npm run login 으로 부계정 로그인을 다시 해주세요.', ADMIN_URL + '?tab=status')
+    }
+    // 검색용 계정: 수집은 계속되고 매장 신청 자동 검토만 멈춤 → 6시간에 한 번
+    if (searchLoginRequired) {
+      await once(state, 'ig-search-login', 6, '🔎 검색용 인스타 계정 로그인이 필요합니다. 매장 신청 자동 검토가 멈춰 있어요.\nPC에서 npm run login:search 로 검색용 계정에 로그인해 주세요.', ADMIN_URL + '?tab=requests')
     }
     for (const text of pickErrorAlerts(errors, state)) await sendAlert(text, ADMIN_URL + '?tab=status')
 

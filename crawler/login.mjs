@@ -1,11 +1,13 @@
 // 자동화용 브라우저 창을 열고, 사용자가 직접 인스타그램에 로그인할 때까지 기다립니다.
 // 비밀번호는 이 스크립트가 다루지 않습니다. 로그인 상태(쿠키)만 PROFILE_DIR에 남습니다.
+// --search 를 붙이면 검색용 계정 프로필 (npm run login:search)
 import { chromium } from 'playwright'
-import { PROFILE_DIR } from './profile.mjs'
+import { PROFILE_DIR, SEARCH_PROFILE_DIR } from './profile.mjs'
 
 const TIMEOUT_MS = 10 * 60 * 1000 // 최대 10분 대기
+const SEARCH = process.argv.includes('--search')
 
-const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+const context = await chromium.launchPersistentContext(SEARCH ? SEARCH_PROFILE_DIR : PROFILE_DIR, {
   headless: false,
   viewport: { width: 1100, height: 900 },
   locale: 'ko-KR',
@@ -13,7 +15,7 @@ const context = await chromium.launchPersistentContext(PROFILE_DIR, {
 const page = context.pages()[0] ?? (await context.newPage())
 await page.goto('https://www.instagram.com/accounts/login/')
 
-console.log('브라우저 창에서 부계정으로 로그인해 주세요. (최대 10분 대기)')
+console.log(`브라우저 창에서 ${SEARCH ? '검색용 계정' : '부계정'}으로 로그인해 주세요. (최대 10분 대기)`)
 
 const start = Date.now()
 let loggedIn = false

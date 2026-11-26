@@ -74,7 +74,21 @@ try {
     .is('auto_checked_at', null)
     .order('created_at')
     .limit(1)
-  for (const req of toReview ?? []) {
+  // 검토는 검색용 계정으로 (부계정은 피드 읽기·팔로우만). 검색용 계정 로그인이 없으면 검토만 건너뜀
+  let searchCtx = null
+  if (toReview?.length) {
+    try {
+      searchCtx = await openBrowser({ search: true })
+      const cookies = await searchCtx.cookies('https://www.instagram.com')
+      if (!cookies.some((c) => c.name === 'sessionid' && c.value)) throw new LoginRequiredError()
+    } catch (err) {
+      await searchCtx?.close().catch(() => {})
+      searchCtx = null
+      alerts.searchLoginRequired = true
+      await log(`⚠ 검색용 계정 로그인 필요 → 매장 신청 자동 검토 건너뜀 (npm run login:search)`, { level: 'warn' })
+    }
+  }
+  for (const req of searchCtx ? toReview : []) {
     const stamp = new Date().toISOString()
     try {
       const naver = await openNaverBrowser()
@@ -85,7 +99,7 @@ try {
           canAutoAdd: (await autoAddedToday()) < AUTO_ADD_PER_DAY,
           knownBranches: config.accounts.flatMap((a) => a.branches),
         }
-        r = await retryNetwork(`매장 신청 검토 @${req.username}`, () => reviewRequest(context, naver.context, req, opts))
+        r = await retryNetwork(`매장 신청 검토 @${req.username}`, () => reviewRequest(searchCtx, naver.context, req, opts))
       } finally {
         await naver.browser.close()
       }
@@ -101,7 +115,12 @@ try {
       const label = { approve: '자동 승인', reject: '자동 거절', manual: '관리자 확인 필요' }[r.decision]
       await log(`🔎 매장 신청 @${req.username} ${label}: ${r.note}`, { account: req.username })
     } catch (err) {
-      if (err instanceof LoginRequiredError) throw err
+      // 검색용 계정 로그인이 풀린 것 (부계정 문제 아님) → 검토만 멈추고 수집은 계속
+      if (err instanceof LoginRequiredError) {
+        alerts.searchLoginRequired = true
+        await log(`⚠ 검색용 계정 로그인 풀림 → 매장 신청 자동 검토 멈춤 (npm run login:search)`, { level: 'warn' })
+        continue
+      }
       // 인터넷 문제면 검토한 것으로 치지 않고 다음 실행 때 다시 검토
       if (!NETWORK_ERR.test(String(err?.message))) {
         await db.from('shop_requests').update({ auto_checked_at: stamp, auto_note: `자동 검토 실패: ${shortError(err)}`.slice(0, 500) }).eq('id', req.id)
@@ -110,6 +129,7 @@ try {
     }
     await pause()
   }
+  await searchCtx?.close().catch(() => {})
 
   // 1) 승인된 매장 추가 (관리자 승인 + 자동 승인)
   const { data: approved } = await db.from('shop_requests').select('*').eq('status', 'approved').order('created_at')

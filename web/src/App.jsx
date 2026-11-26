@@ -332,7 +332,7 @@ function Feed() {
                   } else setOpenSido(openSido === sido ? null : sido)
                 }}
               >
-                {single ? list[0] : sido}
+                {single ? (list[0] === sido ? sido : `${sido} ${list[0]}`) : sido}
                 {!single && (picked ? ` ${picked}` : ' ▾')}
               </button>
             )

@@ -26,6 +26,30 @@ const daysAgo = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 864
 // 인스타 이름 앞부분만: "오타쿠플래닛 • 홍대 피규어 & 굿즈샵" → "오타쿠플래닛"
 export const cleanName = (s) => String(s ?? '').split(/\s*[•|｜/·\-–—(（[【:]\s*/)[0].trim() || null
 
+// 시·구 → 상권 이름 (등록된 지점 중 같은 구가 없을 때 씀)
+const AREA_OF_DISTRICT = {
+  '서울 마포구': '홍대',
+  '서울 서대문구': '신촌',
+  '서울 광진구': '건대',
+  '서울 성동구': (a) => (/마조로|왕십리|행당/.test(a) ? '왕십리' : '성수'),
+  '서울 송파구': '잠실',
+  '서울 강동구': '천호',
+  '서울 관악구': '신림',
+  '서울 중구': '명동',
+  '서울 종로구': '종로',
+  '서울 노원구': '노원',
+  '서울 영등포구': '영등포',
+  '대구 중구': '동성로',
+  '부산 부산진구': '서면',
+  '부산 해운대구': '해운대',
+  '부산 중구': '남포동',
+  '인천 부평구': '부평',
+  '인천 남동구': '구월동',
+  '광주 동구': '충장로',
+  '대전 중구': '은행동',
+  '대전 서구': '둔산동',
+}
+
 // 주소의 시·구 (예: "서울 마포구")
 const district = (address) => String(address ?? '').split(/\s+/).slice(0, 2).join(' ')
 
@@ -41,6 +65,9 @@ export function regionFromAddress(address, known = []) {
   }
   const parts = String(address ?? '').split(/\s+/)
   if (!parts[0]) return null
+  // 구 이름 대신 사람들이 부르는 상권 이름 (2026-11-26 사용자 결정)
+  const area = AREA_OF_DISTRICT[`${parts[0].replace(/(특별시|광역시)$/, '')} ${parts[1] ?? ''}`]
+  if (area) return typeof area === 'function' ? area(String(address)) : area
   if (/^서울/.test(parts[0])) return parts[1]?.replace(/구$/, '') || '서울'
   if (/^(경기|강원|충청|충북|충남|전라|전북|전남|경상|경북|경남|제주)/.test(parts[0])) return parts[1]?.replace(/[시군]$/, '') || parts[0]
   return parts[0].replace(/(특별시|광역시|특별자치시|시)$/, '')

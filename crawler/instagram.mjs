@@ -1,7 +1,7 @@
 // 인스타그램에서 매장 게시물을 가져옵니다.
 // 로그인된 브라우저 프로필로 계정 페이지를 열고, 페이지가 스스로 받아오는 데이터(JSON) 중에서 게시물을 골라냅니다.
 import { chromium } from 'playwright'
-import { PROFILE_DIR } from './profile.mjs'
+import { PROFILE_DIR, SEARCH_PROFILE_DIR } from './profile.mjs'
 
 export class LoginRequiredError extends Error {
   constructor() {
@@ -10,8 +10,9 @@ export class LoginRequiredError extends Error {
 }
 
 // --hidden 을 붙이면 창 없이 실행 (작업 스케줄러용)
-export async function openBrowser({ headless = process.argv.includes('--hidden') } = {}) {
-  return chromium.launchPersistentContext(PROFILE_DIR, {
+// search: true 면 검색용 계정 프로필 (보기만 하는 일)
+export async function openBrowser({ headless = process.argv.includes('--hidden'), search = false } = {}) {
+  return chromium.launchPersistentContext(search ? SEARCH_PROFILE_DIR : PROFILE_DIR, {
     headless,
     viewport: { width: 1100, height: 900 },
     locale: 'ko-KR',
