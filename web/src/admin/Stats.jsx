@@ -38,7 +38,7 @@ const FEATURE_LABELS = {
   shop_only: '이 매장 소식만 보기',
   map_click: '네이버 지도',
   phone_click: '전화 걸기',
-  insta_click: '인스타그램 이동',
+  insta_click: '원본 보기 (인스타)',
   request_open: '매장 추가 신청 창',
   request_submit: '매장 추가 신청 완료',
 }
@@ -236,7 +236,7 @@ export default function Stats() {
                   <tr>
                     <th>매장</th>
                     <th>정보 창</th>
-                    <th>인스타 이동</th>
+                    <th>원본 보기</th>
                     <th>지도</th>
                     <th>전화</th>
                     <th>합계</th>
@@ -293,7 +293,7 @@ export default function Stats() {
           </section>
 
           <section className="a-card a-pad">
-            <h3 className="a-h3">인스타 이동이 많은 글</h3>
+            <h3 className="a-h3">원본 보러 간 글</h3>
             {s.posts.length === 0 ? (
               <p className="a-empty">기록이 없습니다.</p>
             ) : (
