@@ -1,7 +1,7 @@
 // 글 분류 고치기: 분류·상품 종류·작품·일정 직접 수정, 글 완전 삭제
 // 관리자가 저장한 글은 "분류 완료" 표시가 붙고 크롤러가 자동 분류로 덮어쓰지 않습니다.
 import { useCallback, useEffect, useState } from 'react'
-import { imageUrl, supabase } from '../supabase.js'
+import { imageUrl, supabase, thumbUrl } from '../supabase.js'
 import { titleOf } from '../format.js'
 import { CATEGORIES, GOODS_TYPES, fmtTime, fromKstDate, fromList, toKstDate, toList } from './util.js'
 import { deletePost } from './deletePost.js'
@@ -76,7 +76,7 @@ export default function Posts() {
           {rows.map((p) => (
             <div key={p.code}>
               <button className="a-row a-row-btn a-post-row" onClick={() => setOpenCode(openCode === p.code ? null : p.code)}>
-                {p.image_path ? <img className="a-thumb" src={imageUrl(p.image_path)} alt="" loading="lazy" /> : <div className="a-thumb" />}
+                {p.image_path ? <img className="a-thumb" src={thumbUrl(p.image_path) ?? imageUrl(p.image_path)} alt="" loading="lazy" /> : <div className="a-thumb" />}
                 <div className="a-row-main">
                   <div className="a-post-title">{titleOf(p.caption) || '(본문 없음)'}</div>
                   <div className="a-muted a-small-text">

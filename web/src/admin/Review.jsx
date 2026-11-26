@@ -3,7 +3,7 @@
 // - 검토 완료: 그대로 두거나 분류를 바꿔서 확정 (크롤러가 덮어쓰지 않음)
 // - 삭제: 글과 사진을 완전히 지우고, 다시 수집되지 않게 기록
 import { useCallback, useEffect, useState } from 'react'
-import { imageUrl, supabase } from '../supabase.js'
+import { imageUrl, supabase, thumbUrl } from '../supabase.js'
 import { CATEGORIES, fmtTime } from './util.js'
 import { deletePost } from './deletePost.js'
 
@@ -80,7 +80,7 @@ function ReviewCard({ post, shopName, onDone }) {
   return (
     <div className="a-card a-review">
       <a className="a-review-img" href={post.url} target="_blank" rel="noopener noreferrer">
-        {post.image_path ? <img src={imageUrl(post.image_path)} alt="" loading="lazy" /> : <span>사진 없음</span>}
+        {post.image_path ? <img src={thumbUrl(post.image_path) ?? imageUrl(post.image_path)} alt="" loading="lazy" /> : <span>사진 없음</span>}
         {post.media_type === '동영상' && <span className="a-review-badge">▶ 릴스</span>}
       </a>
       <div className="a-review-body">
