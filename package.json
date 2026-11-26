@@ -6,6 +6,7 @@
   "scripts": {
     "login": "node crawler/login.mjs",
     "login:search": "node crawler/login.mjs --search",
+    "login:search2": "node crawler/login.mjs --search2",
     "fetch": "node crawler/fetch.mjs",
     "test:classify": "node crawler/test-classify.mjs",
     "check:db": "node --env-file=.env crawler/check-db.mjs",

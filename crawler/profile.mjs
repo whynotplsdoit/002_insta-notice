@@ -11,3 +11,6 @@ export const PROFILE_DIR = path.join(BASE, 'profile')
 // 검색용 계정 (매장 신청 자동 검토·매장 찾기처럼 "보기만" 하는 일). 부계정이 막히지 않게 따로 씀
 // 로그인: npm run login:search
 export const SEARCH_PROFILE_DIR = path.join(BASE, 'profile-search')
+
+// 검색용 계정 2 (예전 글 훑기처럼 양이 많은 일을 검색용 계정 1과 나눠서). 로그인: npm run login:search2
+export const SEARCH2_PROFILE_DIR = path.join(BASE, 'profile-search2')
