@@ -210,7 +210,7 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
             </button>
           )}
           <button type="button" className={`chip${area === null ? ' on' : ''}`} aria-pressed={area === null} onClick={() => pickArea(null)}>
-            전체 지역
+            전체
           </button>
           {sections
             .filter((s) => s.sido !== '지역 미정' && s.sido !== ONLINE)
