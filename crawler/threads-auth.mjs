@@ -1,7 +1,8 @@
-// 쓰레드 권한 전체(삭제 포함) 토큰 받기 — 토큰 생성기는 threads_delete 를 안 넣어 줘서 로그인 승인 방식 사용
+// 쓰레드 권한 전체(삭제 포함) 토큰 받기 → .env + Supabase sns_tokens (슬랙 봇용) — 토큰 생성기는 threads_delete 를 안 넣어 줘서 로그인 승인 방식 사용
 //   1) npm run threads:auth            → 승인 주소 출력 (브라우저에서 열어 허용)
 //   2) npm run threads:auth -- "<허용 후 이동된 주소 전체 또는 code>"  → 60일 토큰을 .env 에 저장
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createClient } from '@supabase/supabase-js';
 
 const APP_ID = '987139610717992';
 const REDIRECT = 'https://goods-radar-xi.vercel.app/';
@@ -46,7 +47,14 @@ if (!input) {
     setVar('THREADS_USER_ID', me.id);
     setVar('THREADS_TOKEN_EXPIRES', expires);
     writeFileSync(ENV_PATH, env);
-    console.log(`✅ 새 토큰 저장 (만료 ${expires})`);
+    // 슬랙 봇(Vercel)도 쓰도록 Supabase 에도 저장
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+    const { error } = await db.from('sns_tokens').upsert({
+      platform: 'threads', access_token: long.access_token, user_id: me.id,
+      expires_at: new Date(Date.now() + long.expires_in * 1000).toISOString(), refreshed_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(`Supabase 저장 실패 (21-sns.sql 실행했나요?): ${error.message}`);
+    console.log(`✅ 새 토큰 저장 (.env + Supabase, 만료 ${expires})`);
   } catch (e) {
     console.error(`❌ ${e.message}`);
     process.exitCode = 1;

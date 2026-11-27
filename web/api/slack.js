@@ -4,6 +4,9 @@
 //   매장 신청: [승인] [거절 이유 선택 ▾]   (승인하면 PC 크롤러가 15분 안에 팔로우·첫 수집)
 //   의견:      [보관] [삭제]   ("의견 보관": 보관한 의견 [삭제], "의견 스팸": 스팸함 [복원] [삭제], 삭제는 완전히 지움)
 //   기타 검토: [게시] [삭제]   (삭제는 글·사진을 지우고 다시 수집되지 않게 기록, 되돌릴 수 없음)
+//   쓰레드:    "@goods-radar 쓰레드" → [새 글 쓰기] + 최근 글마다 [수정] [삭제] (계정 @whynot.plsdoit)
+//              쓰레드 API 에 수정이 없어서 [수정] = 고친 글을 새로 올리고 원래 글 삭제
+//              토큰은 Supabase sns_tokens (21-sns.sql, PC 에서 npm run threads:auth), 쓸 때 7일마다 자동 연장
 //
 // 슬랙 앱 설정
 //   OAuth & Permissions → Bot Token Scopes: app_mentions:read, chat:write
@@ -14,6 +17,8 @@
 //   SLACK_ALLOWED_USERS  답하고 버튼을 누를 수 있는 슬랙 사용자 ID (쉼표로 여러 명). 비우면 아무도 처리 못 함(조회만)
 import crypto from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
+import { waitUntil } from '@vercel/functions'
+import { postText, deletePost, listPosts, postStats, refreshIfNeeded, tokenInfo } from './_threads.js'
 
 const SITE = 'https://goods-radar-xi.vercel.app'
 const MAX_ITEMS = 10 // 한 번에 보여줄 개수 (슬랙 메시지 칸 수 제한)
@@ -90,6 +95,7 @@ const HELP = [
   '• `@goods-radar 신청`: 확인이 필요한 매장 신청 → [승인] [거절 이유 선택]',
   '• `@goods-radar 의견`: 새 의견 → [보관] [삭제]  (`의견 보관`: 보관한 의견 → [삭제] / `의견 스팸`: 자동으로 걸러진 의견 → [복원] [삭제])',
   '• `@goods-radar 기타`: 기타 검토 대기 글 → [게시] [삭제]',
+  '• `@goods-radar 쓰레드`: 쓰레드(@whynot.plsdoit) [새 글 쓰기] + 최근 글 [수정] [삭제]',
   '*조회*',
   '• `@goods-radar 매장`: 매장 수·매장 목록',
   '• `@goods-radar 수집`: 마지막 자동 확인·수집 중인 매장·오래 수집 안 된 매장·분류별 글 수',
@@ -393,6 +399,85 @@ const OPEN = {
   open_stats: (db) => viewStats(db, '7일'),
 }
 
+// ---------- 쓰레드 (@whynot.plsdoit) ----------
+async function viewThreads(db) {
+  let warn = ''
+  try {
+    await refreshIfNeeded(db)
+  } catch (e) {
+    warn = `⚠️ 토큰 자동 연장 실패: ${esc(e.message)} · `
+  }
+  const [info, posts] = await Promise.all([tokenInfo(db), listPosts(db, 5)])
+  const stats = await Promise.all(posts.map((p) => postStats(db, p.id).catch(() => null)))
+  const blocks = [section('*[쓰레드] @whynot.plsdoit 최근 글*', button('✏️ 새 글 쓰기', 'thr_new', 'x', 'primary'))]
+  if (!posts.length) blocks.push(context('아직 올린 글이 없습니다.'))
+  posts.forEach((p, i) => {
+    const s = stats[i]
+    const line = s ? `
+👀 ${s.views} · ❤️ ${s.likes} · 💬 ${s.replies} · 🔁 ${s.reposts}` : ''
+    blocks.push(section(`*${fmtTime(p.timestamp)}* · <${p.permalink}|쓰레드에서 보기>
+${esc(oneLine(p.text, 200))}${line}`))
+    blocks.push(
+      actions(
+        button('수정', 'thr_edit', `${p.id}|${p.text ?? ''}`.slice(0, 2000)),
+        button('삭제', 'thr_delete', p.id, 'danger', '이 글을 쓰레드에서 지웁니다. 되돌릴 수 없습니다.'),
+      ),
+    )
+  })
+  const days = info.expires_at ? Math.floor((new Date(info.expires_at).getTime() - Date.now()) / DAY) : null
+  blocks.push(context(`${warn}토큰 만료까지 ${days ?? '?'}일 (쓸 때 7일마다 자동 연장) · [수정]은 고친 글을 새로 올리고 원래 글을 지웁니다 (좋아요·답글은 사라짐)`))
+  return msg(`쓰레드 최근 글 ${posts.length}개`, blocks)
+}
+
+// 새 글 쓰기·수정 창
+function threadModal({ id, text, channel, thread }) {
+  return {
+    type: 'modal',
+    callback_id: 'thr_submit',
+    private_metadata: JSON.stringify({ id: id || null, channel, thread }),
+    title: { type: 'plain_text', text: id ? '쓰레드 글 수정' : '쓰레드 새 글' },
+    submit: { type: 'plain_text', text: id ? '수정해서 게시' : '게시' },
+    close: { type: 'plain_text', text: '취소' },
+    blocks: [
+      {
+        type: 'input',
+        block_id: 'body',
+        label: { type: 'plain_text', text: '내용 (500자까지)' },
+        element: { type: 'plain_text_input', action_id: 'text', multiline: true, max_length: 500, ...(text ? { initial_value: text } : {}) },
+      },
+      context(id ? '쓰레드는 글 수정 기능이 없어서, 고친 글을 새로 올리고 원래 글을 지웁니다. 원래 글의 좋아요·답글은 사라집니다.' : '[게시]를 누르면 바로 @whynot.plsdoit 에 올라갑니다.'),
+    ],
+  }
+}
+
+// 창에서 [게시] 누른 뒤 (슬랙은 3초 안에 창을 닫아야 해서 뒤에서 처리)
+async function publishFromModal({ id, channel, thread }, text, user) {
+  const client = db()
+  let done
+  try {
+    const { permalink } = await postText(client, text)
+    let note = ''
+    if (id) {
+      try {
+        await deletePost(client, id)
+        note = ' (원래 글은 지웠습니다)'
+      } catch (e) {
+        note = ` ⚠️ 새 글은 올렸지만 원래 글은 못 지웠습니다: ${esc(e.message)}`
+      }
+    }
+    done = `${id ? '✏️ 수정해서 게시했습니다' : '✅ 쓰레드에 게시했습니다'}${note} · <${permalink}|글 보기> · <@${user}>`
+  } catch (e) {
+    done = `⚠️ 게시하지 못했습니다: ${esc(e.message)} · <@${user}>`
+  }
+  let list = { blocks: [] }
+  try {
+    list = await viewThreads(client)
+  } catch {
+    /* 목록은 못 읽어도 결과는 알림 */
+  }
+  await slackApi('chat.postMessage', { channel, thread_ts: thread, unfurl_links: false, unfurl_media: false, text: done, blocks: [section(done), ...list.blocks] })
+}
+
 async function viewOverview(db) {
   const head = (q) => q.then(({ count }) => count ?? 0)
   const since7 = new Date(Date.now() - 7 * DAY).toISOString()
@@ -465,6 +550,7 @@ export async function answer(text, db) {
   const t = text.replace(/<@[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   try {
     if (!t || /^(전체|한눈|요약|메뉴)/.test(t)) return await viewOverview(db)
+    if (/^(쓰레드|threads)/i.test(t)) return await viewThreads(db)
     if (/^(신청|매장\s*신청)/.test(t)) return await listRequests(db)
     if (/^(의견|스팸)/.test(t)) return await listFeedback(db, /스팸/.test(t) ? 'spam' : /보관/.test(t) ? 'kept' : 'new')
     if (/^(기타|검토)/.test(t)) return await listReview(db)
@@ -525,6 +611,9 @@ export async function act(action, value, db) {
       must(await db.from('posts').delete().eq('code', post.code))
       return { done: '🗑 글을 삭제했습니다.', list: 'review' }
     }
+    case 'thr_delete':
+      await deletePost(db, value)
+      return { done: '🗑 쓰레드 글을 삭제했습니다.', list: 'threads' }
     default:
       return { done: '알 수 없는 버튼입니다.', list: null }
   }
@@ -535,7 +624,9 @@ const relist = (list, db) =>
     ? listRequests(db)
     : list?.startsWith('feedback')
       ? listFeedback(db, { feedback_kept: 'kept', feedback_spam: 'spam' }[list] ?? 'new')
-      : list === 'review' ? listReview(db) : Promise.resolve(msg(''))
+      : list === 'review'
+        ? listReview(db)
+        : list === 'threads' ? viewThreads(db) : Promise.resolve(msg(''))
 
 // ---------- 슬랙으로 보내기 ----------
 async function slackApi(method, payload) {
@@ -560,10 +651,25 @@ export async function POST(request) {
   // 버튼 누름 (form 형식: payload=JSON)
   if ((request.headers.get('content-type') ?? '').includes('application/x-www-form-urlencoded')) {
     const p = JSON.parse(new URLSearchParams(raw).get('payload') ?? '{}')
+    // 쓰레드 글 창에서 [게시]
+    if (p.type === 'view_submission' && p.view?.callback_id === 'thr_submit') {
+      if (!allowedUsers().includes(p.user?.id)) return Response.json({ response_action: 'errors', errors: { body: '처리 권한이 없습니다.' } })
+      const text = p.view.state?.values?.body?.text?.value ?? ''
+      if (!text.trim()) return Response.json({ response_action: 'errors', errors: { body: '내용을 적어 주세요.' } })
+      waitUntil(publishFromModal(JSON.parse(p.view.private_metadata || '{}'), text, p.user.id))
+      return new Response('') // 빈 답 = 창 닫기
+    }
     if (p.type !== 'block_actions' || !p.actions?.[0]) return new Response('ok')
     const a = p.actions[0]
     if (!allowedUsers().includes(p.user?.id)) {
       await fetch(p.response_url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ response_type: 'ephemeral', replace_original: false, text: '처리 권한이 없습니다.' }) })
+      return new Response('ok')
+    }
+    // 쓰레드 [새 글 쓰기] [수정]: 글 쓰는 창 열기 (수정은 버튼 값 "글ID|원래 글")
+    if (a.action_id === 'thr_new' || a.action_id === 'thr_edit') {
+      const [id, ...rest] = a.action_id === 'thr_edit' ? String(a.value).split('|') : []
+      const view = threadModal({ id, text: rest.join('|'), channel: p.channel?.id, thread: p.message?.thread_ts ?? p.message?.ts })
+      await slackApi('views.open', { trigger_id: p.trigger_id, view })
       return new Response('ok')
     }
     const client = db()
@@ -609,5 +715,5 @@ export async function POST(request) {
 }
 
 export function GET() {
-  return new Response('굿즈레이더 슬랙 봇입니다. 슬랙에서 @goods-radar 도움말 을 입력해 보세요.')
+  return new Response('굿즈레이더 슬랙 봇입니다 (쓰레드 지원). 슬랙에서 @goods-radar 도움말 을 입력해 보세요.')
 }

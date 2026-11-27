@@ -1,15 +1,25 @@
-// 쓰레드(Threads) 글 올리기·지우기 (공식 API, .env 의 THREADS_ACCESS_TOKEN / THREADS_USER_ID 사용)
-const API = 'https://graph.threads.net/v1.0';
+// 쓰레드(Threads) 글 올리기·조회·지우기 (공식 API)
+// 토큰: Supabase sns_tokens 표 (슬랙 봇과 같이 씀) → 없으면 .env 의 THREADS_ACCESS_TOKEN / THREADS_USER_ID
+import { createClient } from '@supabase/supabase-js';
 
-function creds() {
+const API = 'https://graph.threads.net/v1.0';
+let cached;
+
+async function creds() {
+  if (cached) return cached;
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+    const { data } = await db.from('sns_tokens').select('access_token, user_id').eq('platform', 'threads').maybeSingle();
+    if (data) return (cached = { token: data.access_token, userId: data.user_id });
+  }
   const token = process.env.THREADS_ACCESS_TOKEN;
   const userId = process.env.THREADS_USER_ID;
-  if (!token || !userId) throw new Error('THREADS_ACCESS_TOKEN / THREADS_USER_ID 가 없어요 (npm run threads:connect 먼저)');
-  return { token, userId };
+  if (!token || !userId) throw new Error('쓰레드 토큰이 없어요 (npm run threads:auth 먼저)');
+  return (cached = { token, userId });
 }
 
 async function call(method, path, params = {}) {
-  const { token } = creds();
+  const { token } = await creds();
   const q = new URLSearchParams({ ...params, access_token: token });
   const res = await fetch(`${API}${path}?${q}`, { method });
   const body = await res.json().catch(() => ({}));
@@ -22,7 +32,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 글자만 있는 글 올리기 → { id, permalink }
 export async function postText(text) {
   if (!text || text.length > 500) throw new Error('글은 1~500자여야 해요');
-  const { userId } = creds();
+  const { userId } = await creds();
   const { id: creationId } = await call('POST', `/${userId}/threads`, { media_type: 'TEXT', text });
   // 컨테이너 준비 확인 (글자 글은 보통 바로 끝남)
   for (let i = 0; i < 10; i++) {
@@ -42,7 +52,7 @@ export async function deletePost(id) {
 
 // 내 글 목록 (최신순)
 export async function listPosts(limit = 10) {
-  const { userId } = creds();
+  const { userId } = await creds();
   const { data } = await call('GET', `/${userId}/threads`, {
     fields: 'id,text,timestamp,permalink,media_type', limit: String(limit),
   });
@@ -57,7 +67,7 @@ export async function postStats(id) {
 
 // 연결된 토큰에 실제로 들어 있는 권한 확인
 export async function tokenScopes() {
-  const { token } = creds();
+  const { token } = await creds();
   const q = new URLSearchParams({ input_token: token, access_token: token });
   const res = await fetch(`https://graph.threads.net/v1.0/debug_token?${q}`);
   const body = await res.json().catch(() => ({}));
