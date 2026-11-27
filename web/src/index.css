@@ -3,7 +3,7 @@
   --brand-navy: #20203e;
   --brand-pink: #eb5499;
 
-  --bg: var(--brand-navy); /* 머리글과 같은 네이비로 통일 */
+  --bg: #f3f3f8; /* 관리자 화면과 같은 밝은 회색 바탕 + 네이비 머리글 */
   --surface: #ffffff;
   --text: #1a1a33;
   --muted: #6b6c80;
@@ -32,11 +32,11 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #20203e;
-    --surface: #2a2a4c;
+    --bg: #17172e;
+    --surface: #222244;
     --text: #ececf6;
-    --muted: #9c9db8;
-    --line: #313154;
+    --muted: #a2a3bf;
+    --line: #34345a;
     --accent: #f26aa8;
     --accent-soft: #42213f;
     --chip: #2c2c4e;
