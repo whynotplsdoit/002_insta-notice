@@ -797,6 +797,10 @@
   background: #03c75a;
   color: #fff;
 }
+.pill-btn.online {
+  background: var(--accent);
+  color: #fff;
+}
 .branch-body .toggle-btn {
   align-self: flex-start;
 }

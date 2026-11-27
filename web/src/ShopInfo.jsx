@@ -6,6 +6,7 @@ import { imageUrl } from './supabase.js'
 import { hoursLines, openStatus, todayName } from './hours.js'
 import { track } from './track.js'
 import { FavButton } from './favorites.jsx'
+import { ONLINE } from './regions.js'
 import { useScrollLock } from './useScrollLock.js'
 import { useBackToClose } from './useBackToClose.js'
 
@@ -127,7 +128,6 @@ export default function ShopInfo({ account, branches, posts, focusBranches = [],
 }
 
 // 오프라인 매장이 없는 온라인 매장: 지점 지역을 "온라인"으로 둠 (관리자 매장 탭에서 지역에 "온라인")
-export const ONLINE = '온라인'
 
 function OnlineCard({ branch, link }) {
   return (
@@ -141,7 +141,7 @@ function OnlineCard({ branch, link }) {
         {link && (
           <div className="branch-actions">
             <a
-              className="pill-btn naver"
+              className="pill-btn online"
               href={link}
               target="_blank"
               rel="noopener noreferrer"

@@ -10,7 +10,7 @@ import { imageUrl } from './supabase.js'
 import { openStatus } from './hours.js'
 import { track } from './track.js'
 import { FavButton } from './favorites.jsx'
-import { branchSido, groupRegions, sidoOfRegionMap } from './regions.js'
+import { branchSido, groupRegions, ONLINE, sidoOfRegionMap } from './regions.js'
 
 const SORTS = [
   { id: 'recent', label: '최근 소식순' },
@@ -64,7 +64,7 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
     }
     return [...byShop.values()].map((r) => {
       // 지역이 "온라인"인 지점 = 오프라인 매장 없음 (ShopInfo ONLINE)
-      const statuses = r.branches.map((b) => (b.region === '온라인' ? { kind: 'online', text: '온라인 매장' } : openStatus(b.hours, now)))
+      const statuses = r.branches.map((b) => (b.region === ONLINE ? { kind: 'online', text: '온라인 매장' } : openStatus(b.hours, now)))
       const status = statuses.sort((a, b) => STATUS_RANK[a.kind] - STATUS_RANK[b.kind])[0] ?? { kind: 'unknown', text: '영업시간 정보 없음' }
       return {
         ...r,
@@ -176,6 +176,8 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
     )
   }
 
+  // 온라인 매장은 지역 칩 맨 앞(내 주변 옆)에 고정
+  const online = sections.find((s) => s.sido === ONLINE)
   const shownSections = area && area !== 'near' ? sections.filter((s) => s.sido === area) : sections
   const empty = area === 'near' ? !near || near.list.length === 0 : filtered.length === 0
 
@@ -202,11 +204,16 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
           <button type="button" className={`chip chip-near${area === 'near' ? ' on' : ''}`} aria-pressed={area === 'near'} onClick={() => pickArea('near')}>
             {locState === 'asking' ? '위치 찾는 중…' : '📍 내 주변'}
           </button>
+          {online && (
+            <button type="button" className={`chip chip-near${area === ONLINE ? ' on' : ''}`} aria-pressed={area === ONLINE} onClick={() => pickArea(ONLINE)}>
+              🛒 온라인 <span className="chip-count">{online.shops.length}</span>
+            </button>
+          )}
           <button type="button" className={`chip${area === null ? ' on' : ''}`} aria-pressed={area === null} onClick={() => pickArea(null)}>
             전체 지역
           </button>
           {sections
-            .filter((s) => s.sido !== '지역 미정')
+            .filter((s) => s.sido !== '지역 미정' && s.sido !== ONLINE)
             .map((s) => (
               <button key={s.sido} type="button" className={`chip${area === s.sido ? ' on' : ''}`} aria-pressed={area === s.sido} onClick={() => pickArea(s.sido)}>
                 {s.sido} <span className="chip-count">{s.shops.length}</span>

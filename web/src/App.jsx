@@ -13,7 +13,7 @@ import { BoxIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon,
 import MapView from './MapView.jsx'
 import ShopList from './ShopList.jsx'
 import { useFavorites } from './favorites.jsx'
-import { groupRegions } from './regions.js'
+import { groupRegions, ONLINE } from './regions.js'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
 const SORTS = [
@@ -332,7 +332,7 @@ function Feed() {
                   } else setOpenSido(openSido === sido ? null : sido)
                 }}
               >
-                {single ? (list[0] === sido ? sido : `${sido} ${list[0]}`) : sido}
+                {sido === ONLINE ? '🛒 ' : ''}{single ? (list[0] === sido ? sido : `${sido} ${list[0]}`) : sido}
                 {!single && (picked ? ` ${picked}` : ' ▾')}
               </button>
             )

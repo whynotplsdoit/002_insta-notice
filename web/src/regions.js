@@ -21,6 +21,8 @@ export function sidoOfRegionMap(branches) {
 }
 
 // 지점의 시·도
+export const ONLINE = '온라인' // 오프라인 매장이 없는 매장의 지점 지역
+
 export const branchSido = (b, regionMap) => sidoOf(b.address) ?? regionMap.get(b.region) ?? b.region ?? '기타'
 
 // [['서울', ['홍대', '잠실']], ['부산', ['부산']], ...] (지점 많은 시·도부터, 시·도 안에서는 지점 많은 지역부터)
@@ -36,6 +38,7 @@ export function groupRegions(branches) {
   }
   return [...groups]
     .map(([sido, m]) => [sido, [...m].sort((a, b) => b[1] - a[1]).map(([r]) => r), [...m.values()].reduce((a, b) => a + b, 0)])
-    .sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0], 'ko'))
+    // 온라인(오프라인 매장 없음)은 맨 앞에 고정 — 시·도 사이에 섞이면 안 보여서
+    .sort((a, b) => (b[0] === ONLINE) - (a[0] === ONLINE) || b[2] - a[2] || a[0].localeCompare(b[0], 'ko'))
     .map(([sido, list]) => [sido, list])
 }
