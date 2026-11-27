@@ -1,5 +1,6 @@
 // 즐겨찾기 매장: 로그인 없이 이 브라우저에만 저장 (기기마다 따로)
 // 예전 필터의 "고른 매장"이 있으면 처음 한 번 즐겨찾기로 옮김
+import { HeartIcon } from './icons.jsx'
 import { useCallback, useEffect, useState } from 'react'
 
 const KEY = 'goods-radar:favorites'
@@ -40,21 +41,21 @@ export function useFavorites() {
   return { favorites, isFav, toggleFav }
 }
 
-// 별 버튼 (☆ 빈 별 → 누르면 ★)
+// 단골 매장 버튼 (빈 하트 → 누르면 채운 하트)
 export function FavButton({ on, onToggle, name, className = '' }) {
   return (
     <button
       type="button"
       className={`fav-btn${on ? ' on' : ''} ${className}`}
       aria-pressed={on}
-      aria-label={on ? `${name} 즐겨찾기 해제` : `${name} 즐겨찾기 추가`}
-      title={on ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+      aria-label={on ? `${name} 단골 매장 해제` : `${name} 단골 매장 추가`}
+      title={on ? '단골 매장 해제' : '단골 매장 추가'}
       onClick={(e) => {
         e.stopPropagation()
         onToggle()
       }}
     >
-      {on ? '★' : '☆'}
+      <HeartIcon filled={on} />
     </button>
   )
 }

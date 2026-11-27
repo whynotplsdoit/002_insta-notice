@@ -74,3 +74,10 @@ export const MegaphoneIcon = () => (
     <path d="M18.5 9a4 4 0 0 1 0 6" />
   </svg>
 )
+
+// 단골 매장: 하트 (빈 하트 → 추가하면 채운 하트). 크기는 글자 크기(1em)를 따라감
+export const HeartIcon = ({ filled = false }) => (
+  <svg {...base} width="1em" height="1em" className="ico-heart" fill={filled ? 'currentColor' : 'none'}>
+    <path d="M12 20.3s-7.8-4.7-7.8-10.4A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 7.8 2.7c0 5.7-7.8 10.4-7.8 10.4z" />
+  </svg>
+)

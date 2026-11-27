@@ -9,7 +9,7 @@ import ShopInfo from './ShopInfo.jsx'
 import PostDetail from './PostDetail.jsx'
 import InstallPrompt from './InstallPrompt.jsx'
 import { track } from './track.js'
-import { BoxIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
+import { BoxIcon, HeartIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
 import MapView from './MapView.jsx'
 import ShopList from './ShopList.jsx'
 import { useFavorites } from './favorites.jsx'
@@ -30,9 +30,13 @@ const TABS = [
 ]
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
 const STORAGE_KEY = 'goods-feed:filters:v2'
+const SEEN_KEY = 'goods-radar:tab-seen' // 분류별로 마지막에 본 오늘 글의 수집 시각 (메뉴 핑크 점)
 const CONTACT_EMAIL = 'whynot.plsdoit@gmail.com' // 게시 중단 요청 받는 메일
 const PAGE_SIZE = 30 // 한 번에 보여줄 글 수
-const NEW_MS = 24 * 3600_000 // 24시간 안에 처음 수집된 글은 "NEW"
+// "오늘" = 한국 날짜 기준 (메뉴 핑크 점)
+const DAY_MS = 24 * 3600_000
+const KST_MS = 9 * 3600_000
+const todayStartKST = (ms) => Math.floor((ms + KST_MS) / DAY_MS) * DAY_MS - KST_MS
 
 // 탭·필터는 이 브라우저에만 기억 (저장이 막혀 있어도 정상 동작)
 function loadSaved() {
@@ -128,7 +132,7 @@ function Feed() {
     } catch {
       first = false
     }
-    setToast(on ? (first ? '즐겨찾기에 추가했어요 · 이 브라우저에 저장돼요' : '즐겨찾기에 추가했어요') : '즐겨찾기에서 뺐어요')
+    setToast(on ? (first ? '단골 매장에 추가했어요 · 이 브라우저에 저장돼요' : '단골 매장에 추가했어요') : '단골 매장을 해제했어요')
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(''), first ? 3500 : 1800)
   }
@@ -260,6 +264,60 @@ function Feed() {
     return c
   }, [posts])
 
+  // 메뉴 핑크 점: 그 분류에 오늘(한국 날짜) 올라온 글 중 안 본 게 있으면 표시
+  // 그 메뉴를 보면 본 것으로 침(보는 동안 들어온 글 포함) / "전체"를 보면 모두 본 것 / 전체 점 = 어느 분류든 안 본 오늘 글
+  // 본 뒤에 오늘 글이 또 올라오면 다시 뜨고, 자정이 지나면 어제 글은 빠져서 사라짐
+  const todayStart = todayStartKST(now)
+  const latestByCat = useMemo(() => {
+    const m = {}
+    for (const p of posts) {
+      if (Date.parse(p.posted_at) < todayStart) continue
+      const t = Date.parse(p.first_seen_at) || 0
+      if (t > (m[p.category] ?? 0)) m[p.category] = t
+    }
+    return m
+  }, [posts, todayStart])
+  const [seen, setSeen] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(SEEN_KEY))
+    } catch {
+      return null
+    }
+  })
+  useEffect(() => {
+    if (status !== 'ready') return
+    setSeen((prev) => {
+      const next = { ...(prev ?? {}) }
+      let changed = !prev
+      const mark = (c) => {
+        if ((latestByCat[c] ?? 0) > (next[c] ?? 0)) {
+          next[c] = latestByCat[c]
+          changed = true
+        }
+      }
+      if (tab === '전체') Object.keys(latestByCat).forEach(mark)
+      else if (tab !== 'map') mark(tab)
+      if (!changed) return prev
+      try {
+        localStorage.setItem(SEEN_KEY, JSON.stringify(next))
+      } catch {
+        /* 저장 못 해도 화면은 그대로 */
+      }
+      return next
+    })
+  }, [status, latestByCat, tab])
+  const hasNew = useMemo(() => {
+    const r = {}
+    for (const [c, t] of Object.entries(latestByCat)) {
+      if (t > (seen?.[c] ?? 0)) r[c] = r['전체'] = true
+    }
+    // "새 소식 N개" 버튼 뒤에서 기다리는 글(아직 목록에 안 넣은 글)은 못 본 글이라 무조건 점
+    for (const p of pending) {
+      if (Date.parse(p.posted_at) >= todayStart) r[p.category] = r['전체'] = true
+    }
+    return r
+  }, [seen, latestByCat, pending, todayStart])
+
   const toggle = (list, setList, value) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value])
   const activeFilters = types.length + regions.length + (favOnly ? 1 : 0) + (hidePast ? 1 : 0)
@@ -375,7 +433,7 @@ function Feed() {
         )}
       </fieldset>
       <fieldset>
-        <legend>즐겨찾기 매장</legend>
+        <legend>단골 매장</legend>
         <label className={`check fav-only${favOnly ? ' on' : ''}`}>
           <input
             type="checkbox"
@@ -385,14 +443,14 @@ function Feed() {
               track('filter', 'favorite_only', { on: e.target.checked })
             }}
           />
-          ★ 즐겨찾기 매장 소식만
+          <HeartIcon filled /> 단골 매장 소식만
         </label>
         {favorites.length > 0 ? (
           <ul className="fav-list">
             {favorites.map((u) => (
               <li key={u}>
                 <span>{shopOf.get(u)?.display_name ?? u}</span>
-                <button type="button" aria-label={`${shopOf.get(u)?.display_name ?? u} 즐겨찾기 해제`} onClick={() => onToggleFav(u)}>
+                <button type="button" aria-label={`${shopOf.get(u)?.display_name ?? u} 단골 매장 해제`} onClick={() => onToggleFav(u)}>
                   ✕
                 </button>
               </li>
@@ -400,7 +458,7 @@ function Feed() {
           </ul>
         ) : (
           <p className="fav-empty">
-            매장 탭이나 매장 정보 창의 ☆를 눌러 자주 가는 매장을 저장해 보세요.{' '}
+            매장 탭이나 매장 정보 창의 하트를 눌러 단골 매장을 추가해 보세요.{' '}
             <button type="button" className="link-btn" onClick={goShops}>
               매장 보러 가기
             </button>
@@ -449,10 +507,24 @@ function Feed() {
                 selectTab('전체')
               }}
             >
-              <img className="logo-icon" src="/favicon-64.png" alt="" width="30" height="30" />
-              굿즈레이더
+              <img className="logo-icon" src="/favicon-64.png" alt="" width="36" height="36" />
+              <span className="logo-text">굿즈레이더</span>
             </button>
           </h1>
+          <nav className="tabs top-tabs" aria-label="분류">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`tab${tab === t.id ? ' on' : ''}`}
+                aria-current={tab === t.id ? 'page' : undefined}
+                onClick={() => selectTab(t.id)}
+              >
+                {t.label}
+                {hasNew[t.id] && <span className="tab-dot" aria-label="새 글" />}
+              </button>
+            ))}
+          </nav>
           <div className="header-tools">
             <button
               type="button"
@@ -465,7 +537,7 @@ function Feed() {
             >
               <SlidersIcon />
             </button>
-            <div className="search">
+            <div className={`search${query ? ' has-value' : ''}`}>
               <input
                 type="search"
                 placeholder="작품·매장·내용 검색"
@@ -479,20 +551,6 @@ function Feed() {
             </div>
           </div>
         </div>
-        <nav className="tabs top-tabs" aria-label="분류">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`tab${tab === t.id ? ' on' : ''}`}
-              aria-current={tab === t.id ? 'page' : undefined}
-              onClick={() => selectTab(t.id)}
-            >
-              {t.label}
-              <span className="count">{t.id === 'map' ? accounts.length : counts[t.id] ?? 0}</span>
-            </button>
-          ))}
-        </nav>
         {filtersOpen && (
           <div className="mobile-filters" ref={filtersRef}>
             {filters}
@@ -579,7 +637,7 @@ function Feed() {
             <div className="state">
               <p>
                 {favOnly && favorites.length === 0
-                  ? '즐겨찾기한 매장이 없어요. 매장 탭에서 ☆를 눌러 자주 가는 매장을 저장해 보세요.'
+                  ? '단골 매장이 없어요. 매장 탭에서 하트를 눌러 단골 매장을 추가해 보세요.'
                   : '조건에 맞는 소식이 없습니다.'}
               </p>
               {favOnly && favorites.length === 0 && (
@@ -645,7 +703,6 @@ function Feed() {
                     shopName={shopOf.get(p.account_username)?.display_name ?? p.account_username}
                     showBranch={(branchCount.get(p.account_username) ?? 0) > 1}
                     fav={isFav(p.account_username)}
-                    isNew={now - new Date(p.first_seen_at).getTime() < NEW_MS && now - new Date(p.posted_at).getTime() < NEW_MS}
                     onOpen={() => {
                       setDetail(p)
                       track('more', p.code, { shop: p.account_username })
@@ -714,6 +771,7 @@ function Feed() {
           >
             <span className="tab-icon">
               <t.Icon />
+              {hasNew[t.id] && <span className="tab-dot" aria-label="새 글" />}
             </span>
             {t.label}
           </button>

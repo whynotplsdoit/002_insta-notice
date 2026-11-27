@@ -175,7 +175,7 @@ export default function Stats() {
         r.target === 'hide_past'
           ? '끝난 행사 숨기기'
           : r.target === 'favorite_only'
-            ? '즐겨찾기 매장 소식만'
+            ? '단골 매장 소식만'
             : `${{ type: '종류', region: '지역', shop: '매장', shop_type: '매장 탭 종류', shop_area: '매장 탭 지역', shop_section: '매장 탭 펼치기' }[r.target] ?? r.target}: ${r.meta?.value === 'all' ? '전체' : names.get(r.meta?.value) ?? r.meta?.value}`,
       ).slice(0, 10),
       tabs: count(byType('tab'), (r) => TAB_LABELS[r.target] ?? r.target),
@@ -266,17 +266,17 @@ export default function Stats() {
           </section>
 
           <section className="a-card a-pad">
-            <h3 className="a-h3">즐겨찾기 인기 매장</h3>
+            <h3 className="a-h3">단골 매장 인기 순위</h3>
             {!favs ? (
               <p className="a-empty">불러오는 중…</p>
             ) : favs.length === 0 ? (
-              <p className="a-empty">아직 즐겨찾기 기록이 없습니다.</p>
+              <p className="a-empty">아직 단골 매장 기록이 없습니다.</p>
             ) : (
               <table className="a-table">
                 <thead>
                   <tr>
                     <th>매장</th>
-                    <th>지금 즐겨찾기</th>
+                    <th>지금 단골</th>
                     <th>추가 ({PERIODS.find((p) => p.days === days)?.label})</th>
                     <th>해제 ({PERIODS.find((p) => p.days === days)?.label})</th>
                   </tr>
@@ -294,7 +294,7 @@ export default function Stats() {
               </table>
             )}
             <p className="a-muted a-small-text">
-              "지금 즐겨찾기"는 브라우저마다 마지막으로 누른 상태(추가/해제)로 센 사람 수입니다. 예전 필터에서 옮겨진 즐겨찾기와 브라우저 기록을
+              "지금 단골"은 브라우저마다 마지막으로 누른 상태(추가/해제)로 센 사람 수입니다. 예전 필터에서 옮겨진 단골 매장과 브라우저 기록을
               지운 경우는 셀 수 없어서 실제보다 조금 다를 수 있습니다.
             </p>
           </section>

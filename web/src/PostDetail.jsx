@@ -51,11 +51,6 @@ export default function PostDetail({ post, shop, showBranch, now, fav = false, o
             {photo ? <img src={photo} alt="" /> : <span className="post-shop-ph">{shop?.display_name?.[0] ?? '?'}</span>}
             <span className="post-shop-text">
               <b>
-                {fav && (
-                  <span className="fav-mark" title="즐겨찾기 매장" aria-label="즐겨찾기 매장">
-                    ★
-                  </span>
-                )}
                 {shop?.display_name ?? post.account_username}
                 {showBranch && post.branches.length > 0 && <span> · {post.branches.join(', ')}</span>}
               </b>

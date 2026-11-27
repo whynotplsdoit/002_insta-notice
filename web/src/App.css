@@ -849,7 +849,7 @@
 .logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   margin: 0;
   font-size: 18px;
   font-weight: 800;
@@ -870,10 +870,19 @@
   cursor: pointer;
 }
 
+/* 로고 글씨: Bagel Fat One (굵기 하나뿐이라 400으로, 가짜 굵게 방지) */
+.logo-text {
+  font-family: 'Bagel Fat One', 'Pretendard Variable', 'Pretendard', sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
 .logo-icon {
   display: block;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   flex: none;
   border-radius: 8px;
 }
@@ -929,6 +938,12 @@
   outline: none;
   -webkit-appearance: none;
   appearance: none;
+}
+/* 마우스로 쓰는 PC: 14px (휴대폰·태블릿은 16px 유지 — 아이폰은 16px 미만이면 누를 때 화면이 확대됨) */
+@media (hover: hover) and (pointer: fine) {
+  .search input {
+    font-size: 14px;
+  }
 }
 .search input::-webkit-search-cancel-button {
   -webkit-appearance: none;
@@ -997,22 +1012,27 @@
   display: flex;
 }
 
+/* 메뉴는 머리글 첫 줄 안에 있음: 태블릿은 로고·검색 아래 한 줄 전체, PC는 한 줄 가운데 */
 .top-tabs {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 8px;
+  order: 3;
+  flex: 1 1 100%;
+  margin: 0 -4px -10px; /* 밑줄이 머리글 바닥에 닿게 */
+  padding: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .top-tabs::-webkit-scrollbar {
   display: none;
 }
+/* 메뉴: 꺼짐 = 연한 글자, 켜짐 = 흰 글자 + 핑크 밑줄 */
 .top-tabs .tab {
+  --tab-px: 12px; /* 메뉴 좌우 여백 (PC는 34px) */
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 10px var(--tab-px);
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;
@@ -1024,7 +1044,44 @@
   color: var(--header-text);
   border-bottom-color: var(--accent);
 }
-.top-tabs .count {
+/* 새 글 핑크 점: 메뉴 오른쪽 위 (휴대폰 아래 탭은 아이콘 오른쪽 위) */
+.tab-dot {
+  position: absolute;
+  top: calc(50% - 13px); /* 글자 오른쪽 위 (PC 머리글 높이와 상관없이) */
+  right: calc(var(--tab-px, 12px) - 14px); /* 메뉴 여백이 바뀌어도 글자 바로 옆 */
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-pink);
+  pointer-events: none;
+}
+.tab-icon {
+  position: relative;
+}
+.tab-icon .tab-dot {
+  top: -1px;
+  right: -3px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.count {
+  color: inherit;
+  opacity: 0.7;
+  font-weight: 600;
+}
+.top-tabs .tab.on .count {
+  color: var(--muted);
+  opacity: 1;
+}
+.count {
+  color: inherit;
+  opacity: 0.8;
+  font-weight: 600;
+}
+.count {
+  color: inherit;
+  opacity: 0.7;
+}
+.count {
   color: var(--header-muted);
 }
 .count {
@@ -1250,7 +1307,8 @@
   border-radius: 14px;
   box-shadow: var(--shadow);
 }
-.card-new {
+/* 단골 매장 글: 핑크 테두리 + 사진 왼쪽 위 "★ 단골 매장" 배지 */
+.card-fav {
   border-color: var(--accent);
 }
 
@@ -1285,8 +1343,7 @@
   font-size: 12px;
   font-weight: 600;
 }
-.card-new .card-media::after {
-  content: 'NEW';
+.fav-badge {
   position: absolute;
   top: 10px;
   left: 10px;
@@ -1776,7 +1833,7 @@
     padding: 1px 6px;
     font-size: 11px;
   }
-  .card-new .card-media::after {
+  .fav-badge {
     top: 6px;
     left: 6px;
     padding: 1px 6px;
@@ -1858,12 +1915,77 @@
   .mobile-filters {
     display: none;
   }
+  /* 머리글 한 줄: [로고 | 메뉴(화면 가운데) | 검색창] */
+  .header-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 16px;
+    min-height: 64px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .header-inner .logo {
+    align-self: center;
+  }
+  .header-inner .top-tabs {
+    order: 0;
+    grid-column: 2;
+    margin: 0;
+  }
+  .header-inner .top-tabs .tab {
+    --tab-px: 34px;
+    padding: 0 var(--tab-px);
+  }
+  .header-tools {
+    grid-column: 3;
+    align-self: center;
+    justify-self: end;
+    width: min(320px, 100%);
+  }
+  /* 검색: 평소엔 돋보기 동그라미만, 마우스 올리거나 입력 중·검색어 있으면 왼쪽으로 펼쳐짐 (마우스 쓰는 PC만) */
+  @media (hover: hover) and (pointer: fine) {
+    .header-tools {
+      width: 100%;
+      justify-content: flex-end;
+    }
+    .header-tools .search {
+      flex: none;
+      width: 40px;
+      transition: width 0.25s ease;
+    }
+    .header-tools .search:hover,
+    .header-tools .search:focus-within,
+    .header-tools .search.has-value {
+      width: min(320px, 100%);
+    }
+    .header-tools .search input {
+      cursor: pointer;
+    }
+    .header-tools .search:hover input,
+    .header-tools .search:focus-within input,
+    .header-tools .search.has-value input {
+      cursor: text;
+    }
+    .header-tools .search:not(:hover):not(:focus-within):not(.has-value) input {
+      padding: 0; /* 접힌 40px 동그라미 밖으로 입력칸이 삐져나오지 않게 */
+    }
+    .header-tools .search:not(:hover):not(:focus-within):not(.has-value) input::placeholder {
+      color: transparent;
+    }
+    .header-tools .search-icon {
+      right: 10px;
+    }
+  }
+  .new-pill {
+    top: 80px;
+  }
   .sidebar {
     display: block;
     flex: none;
     width: 240px;
     position: sticky;
-    top: 120px;
+    top: 80px;
     align-self: flex-start;
   }
   .grid {
@@ -2021,6 +2143,21 @@
   font-size: 20px;
   vertical-align: -3px;
 }
+/* 하트 아이콘: 글자 크기를 따라가고 단골 매장 색(핑크) */
+.ico-heart {
+  flex: none;
+  vertical-align: -0.125em;
+  color: var(--fav);
+}
+.fav-badge .ico-heart,
+.chip.on .ico-heart {
+  color: inherit;
+}
+.fav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .chip.chip-fav {
   font-weight: 700;
 }
@@ -2096,47 +2233,6 @@
   white-space: nowrap;
   transform: translateX(-50%);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-}.fav-mark {
-  margin-right: 3px;
-  color: var(--fav);
-}
-
-/* 즐겨찾기 매장 글: 노란 테두리 + 왼쪽 세로줄 + 사진 위 "★ 내 매장" 배지 */
-.card-fav {
-  position: relative;
-  border-color: var(--fav);
-}
-.card-fav::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
-  width: 5px;
-  background: var(--fav);
-}
-.fav-badge {
-  position: absolute;
-  bottom: 8px;
-  left: 10px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--fav);
-  color: #1f1f3a;
-  font-size: 12px;
-  font-weight: 800;
-}
-@media (max-width: 600px) {
-  .fav-badge {
-    bottom: 6px;
-    left: 8px;
-    padding: 1px 6px;
-    font-size: 11px;
-  }
-}.post-shop-text b .fav-mark {
-  font-weight: 800;
-  color: var(--fav);
 }
 
 /* 매장 탭: 지역 칩 · 시·도 묶음 */

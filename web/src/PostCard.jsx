@@ -3,10 +3,11 @@ import { useState } from 'react'
 import { imageUrl, thumbUrl } from './supabase.js'
 import { bodyOf, dateRange, timeAgo, titleOf } from './format.js'
 import { scheduleLabel } from './sort.js'
+import { HeartIcon } from './icons.jsx'
 
 const MAX_WORKS = 3
 
-export default function PostCard({ post, now, shopName, showBranch, isNew, fav = false, onOpen, onShopClick }) {
+export default function PostCard({ post, now, shopName, showBranch, fav = false, onOpen, onShopClick }) {
   const [imgFailed, setImgFailed] = useState(false)
   const [thumbFailed, setThumbFailed] = useState(false) // 작은 사진이 없으면 큰 사진으로
   const title = titleOf(post.caption)
@@ -26,7 +27,7 @@ export default function PostCard({ post, now, shopName, showBranch, isNew, fav =
 
   return (
     <article
-      className={`card card-clickable${isNew ? ' card-new' : ''}${fav ? ' card-fav' : ''}`}
+      className={`card card-clickable${fav ? ' card-fav' : ''}`}
       onClick={open}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !e.target.closest('.shop') && (e.preventDefault(), onOpen())}
       tabIndex={0}
@@ -40,7 +41,11 @@ export default function PostCard({ post, now, shopName, showBranch, isNew, fav =
           <div className="card-noimg">사진 없음</div>
         )}
         {post.media_type === '동영상' && <span className="media-badge">▶ 릴스</span>}
-        {fav && <span className="fav-badge">★ 내 매장</span>}
+        {fav && (
+          <span className="fav-badge">
+            <HeartIcon filled /> 단골 매장
+          </span>
+        )}
       </div>
 
       <div className="card-body">
@@ -54,11 +59,6 @@ export default function PostCard({ post, now, shopName, showBranch, isNew, fav =
             }}
             title="매장 정보 보기"
           >
-            {fav && (
-              <span className="fav-mark" title="즐겨찾기 매장" aria-label="즐겨찾기 매장">
-                ★
-              </span>
-            )}
             {shopName}
             {showBranch && post.branches.length > 0 && <span className="branch"> · {post.branches.join(', ')}</span>}
             <span className="shop-info-icon" aria-hidden="true">ⓘ</span>

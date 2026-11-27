@@ -10,6 +10,7 @@ import { imageUrl } from './supabase.js'
 import { openStatus } from './hours.js'
 import { track } from './track.js'
 import { FavButton } from './favorites.jsx'
+import { HeartIcon } from './icons.jsx'
 import { branchSido, groupRegions, ONLINE, sidoOfRegionMap } from './regions.js'
 
 const SORTS = [
@@ -197,7 +198,13 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
                 track('filter', 'shop_type', { value: t ?? 'all' })
               }}
             >
-              {t === '★' ? `★ 즐겨찾기 ${favCount}` : t ?? '전체'}
+              {t === '★' ? (
+                <>
+                  <HeartIcon filled /> 단골 매장 {favCount}
+                </>
+              ) : (
+                t ?? '전체'
+              )}
             </button>
           ))}
         </div>
@@ -255,7 +262,7 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
 
       {empty ? (
         <div className="state">
-          <p>{type === '★' && favCount === 0 ? '아직 즐겨찾기한 매장이 없어요. 매장 카드의 ☆를 눌러 자주 가는 매장을 저장해 보세요.' : '조건에 맞는 매장이 없습니다.'}</p>
+          <p>{type === '★' && favCount === 0 ? '아직 단골 매장이 없어요. 매장 카드의 하트를 눌러 단골 매장을 추가해 보세요.' : '조건에 맞는 매장이 없습니다.'}</p>
           {(type === '★' || area) && (
             <button
               type="button"
