@@ -165,9 +165,8 @@ export async function savePosts(account, posts, works) {
       ends_at: p.endsAt,
     }
     if (!known.has(p.code)) {
-      // '기타' 새 글: 굿즈 홍보면 그대로 게시, 아니면 사이트("전체" 탭)에 보이면서 관리자 검토 대기
-      const review = p.category === '기타' && !p.goodsPromo
-      newRows.push({ ...auto, hidden: false, needs_review: review })
+      // 새 글은 모두 바로 게시. 욕설·비방 글만 숨기고 관리자 '기타 검토' 대기 (검토에서 올리거나 지움)
+      newRows.push({ ...auto, hidden: p.abusive, needs_review: p.abusive })
     } else if (known.get(p.code).manual) {
       if (changed(base, known.get(p.code))) manualRows.push(base)
     } else if (changed(auto, known.get(p.code))) {

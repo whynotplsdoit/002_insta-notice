@@ -209,18 +209,16 @@ export function isEmptyBody(body) {
   return hangul < 2 && latin < 4
 }
 
-// 굿즈 관련 홍보 글: 상품·매장·작품 이야기가 있으면 '기타'로 바로 게시 (없으면 관리자 검토)
-const PROMO_WORDS = [
-  '굿즈', '키링', '아크릴', '포카', '포토카드', '뱃지', '캔뱃지', '인형', '누이', '스티커', '엽서', '피규어', '가챠', '쿠지',
-  '캐릭터', '애니', '신상', '상품', '판매', '구매', '재고', '매장', '방문', '오픈', '영업', '할인', '증정', '특전', '랜덤', '박스',
-]
-export function isGoodsPromo(body, caption, foundWorks) {
-  if (foundWorks.length) return true
-  return hasAny(withoutHashtags(body) + ' ' + hashtags(caption).join(' '), PROMO_WORDS)
+// 욕설·비방 글: 사이트에 올리지 않고(숨김) 관리자 '기타 검토'로 보냄. 나머지 기타 글은 검토 없이 바로 게시
+// "미친 가격"처럼 홍보에도 쓰는 말은 넣지 않음 (잘못 걸리면 좋은 글이 숨겨지므로 확실한 욕만)
+const ABUSE_RE =
+  /씨\s*발|시\s*발(?![점역])|씌발|ㅅㅂ|ㅆㅂ|병\s*신|ㅄ|좆|존\s*나|졸\s*라|개\s*새\s*끼|새끼야|지\s*랄|ㅈㄹ|미친\s*(놈|년|새끼)|꺼져|닥쳐|엿\s*먹|느\s*금|니\s*애미|애미\s*(없|뒤)|썅|fuck|shit|bitch|사기꾼|쓰레기\s*(같|들)/i
+export function isAbusive(caption) {
+  return ABUSE_RE.test(caption ?? '')
 }
 
 // ---------- 전체 ----------
-// 기타 글에는 emptyBody(본문 없음 → 저장하지 않음), goodsPromo(굿즈 홍보 → 검토 없이 게시)를 함께 돌려줌
+// 기타 글에는 emptyBody(본문 없음 → 저장하지 않음)를 함께 돌려줌. abusive(욕설·비방 → 숨기고 검토)는 모든 분류에 표시
 export function classifyPosts(account, posts, works) {
   const boilerplate = findBoilerplate(posts)
   return posts.map((post) => {
@@ -239,7 +237,7 @@ export function classifyPosts(account, posts, works) {
       endsAt,
       newTagCandidates,
       emptyBody: category === '기타' && isEmptyBody(body),
-      goodsPromo: category === '기타' && isGoodsPromo(body, post.caption ?? '', foundWorks),
+      abusive: isAbusive(post.caption),
     }
   })
 }
