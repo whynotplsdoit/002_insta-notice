@@ -1,17 +1,14 @@
 // 매장 목록 ("매장" 탭의 [목록]): 등록된 모든 매장을 글이 있든 없든 보여줌
-// - 위: 종류 칩(★ 즐겨찾기·전체·굿즈샵·가챠샵…) / 지역 칩(📍 내 주변·전체·서울·경기…) / 정렬(최근 소식순·가나다순)
+// - 지역·매장 종류·상품 종류(그 상품을 다루는 매장)·단골 매장은 필터 창(모든 메뉴 공통)을 따름 / 위: 정렬(최근 소식순·가나다순)
 // - 기본: 시·도별로 묶어서 접기·펼치기 (즐겨찾기가 있는 시·도, 없으면 매장 많은 시·도만 처음에 펼침)
 //   시·도 안에 지역이 여럿이면 세부 지역 칩, 한 번에 30곳씩 그리고 [더 보기]
-// - 📍 내 주변: 누를 때만 위치 권한 → 5km 안 매장을 가까운 순 (없으면 가까운 10곳)
-// - 검색어가 있거나 ★ 즐겨찾기만 볼 때는 묶지 않고 한 목록
-// - 필터 창의 지역 선택과 위쪽 검색창도 그대로 적용
+// - 검색어가 있거나 단골 매장만 볼 때는 묶지 않고 한 목록
 import { useMemo, useState } from 'react'
 import { imageUrl } from './supabase.js'
 import { openStatus } from './hours.js'
 import { track } from './track.js'
 import { FavButton } from './favorites.jsx'
-import { HeartIcon } from './icons.jsx'
-import { branchSido, groupRegions, ONLINE, sidoOfRegionMap } from './regions.js'
+import { branchSido, groupRegions, ONLINE, sidoOfRegionMap, shopTypeOf } from './regions.js'
 
 const SORTS = [
   { id: 'recent', label: '최근 소식순' },
@@ -20,32 +17,17 @@ const SORTS = [
 const RECENT_DAYS = 7
 const DAY = 86400000
 const PAGE = 30 // 한 묶음에 처음 보여줄 매장 수
-const NEAR_KM = 5
-const TYPE_ORDER = ['굿즈샵', '가챠샵', '콜라보카페', '소품·기타'] // 종류 칩 순서 (관리자 ACCOUNT_TYPES 와 같게)
-const typeRank = (t) => (TYPE_ORDER.includes(t) ? TYPE_ORDER.indexOf(t) : TYPE_ORDER.length)
 // 영업 상태 우선순위 (지점이 여러 곳이면 가장 좋은 상태)
 const STATUS_RANK = { open: 0, before: 1, closed: 2, off: 3, unknown: 4, online: 5 }
 
-// 두 좌표 사이 거리 (km)
-function distanceKm(a, b) {
-  const rad = (d) => (d * Math.PI) / 180
-  const dLat = rad(b.lat - a.lat)
-  const dLng = rad(b.lng - a.lng)
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2
-  return 6371 * 2 * Math.asin(Math.sqrt(h))
-}
 const fmtKm = (km) => (km < 1 ? `${Math.round(km * 1000)}m` : `${km < 10 ? km.toFixed(1) : Math.round(km)}km`)
 const fmtAgo = (ms) => {
   const d = Math.floor(ms / DAY)
   return d <= 0 ? '오늘' : d === 1 ? '어제' : d < 30 ? `${d}일 전` : `${Math.floor(d / 30)}달 전`
 }
 
-export default function ShopList({ accounts, branches, posts, regions, query, now, isFav, favCount, onToggleFav, onShopOpen }) {
-  const [type, setType] = useState(null) // null = 전체 종류, '★' = 즐겨찾기만
+export default function ShopList({ accounts, branches, posts, regions, shopKinds, goodsTypes, goodsOfShop, favOnly, onClearFilters, query, now, isFav, favCount, onToggleFav, onShopOpen }) {
   const [sort, setSort] = useState('recent')
-  const [area, setArea] = useState(null) // null = 전체(시·도별 묶음) | 'near' = 내 주변 | 시·도 이름
-  const [here, setHere] = useState(null) // { lat, lng }
-  const [locState, setLocState] = useState('idle') // idle | asking | denied
   const [opened, setOpened] = useState(null) // 펼친 시·도 (null = 아직 안 건드림 → 기본값)
   const [subPick, setSubPick] = useState({}) // 시·도 → 고른 세부 지역
   const [shownOf, setShownOf] = useState({}) // 묶음 → 보여줄 수
@@ -73,19 +55,19 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
         regions: [...new Set(r.branches.map((b) => b.region).filter(Boolean))],
         sidos: [...new Set(r.branches.map((b) => branchSido(b, regionMap)))],
         recent: r.latest > 0 && now - r.latest < RECENT_DAYS * DAY,
-        type: r.account.account_type || '굿즈샵',
+        type: shopTypeOf(r.account),
       }
     })
   }, [accounts, branches, posts, now, regionMap])
 
-  const types = useMemo(() => [...new Set(rows.map((r) => r.type))].sort((a, b) => typeRank(a) - typeRank(b)), [rows])
-
-  // 종류·필터 창 지역·검색어로 거른 매장 (+ 거리)
+  // 필터 창(지역·매장 종류·상품 종류·단골 매장)·검색어로 거른 매장
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/\s+/g, '')
     return rows
       .filter((r) => {
-        if (type === '★' ? !isFav(r.account.username) : type && r.type !== type) return false
+        if (favOnly && !isFav(r.account.username)) return false
+        if (shopKinds.length && !shopKinds.includes(r.type)) return false
+        if (goodsTypes.length && !goodsTypes.some((t) => goodsOfShop.get(r.account.username)?.has(t))) return false
         if (regions.length && !r.regions.some((x) => regions.includes(x))) return false
         if (q) {
           const hay = [r.account.display_name, r.account.username, r.account.ig_full_name, ...r.regions, ...r.sidos, ...r.branches.map((b) => b.name)]
@@ -96,24 +78,12 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
         }
         return true
       })
-      .map((r) => {
-        const pts = r.branches.filter((b) => b.lat != null && b.lng != null)
-        return { ...r, dist: here && pts.length ? Math.min(...pts.map((b) => distanceKm(here, { lat: b.lat, lng: b.lng }))) : null }
-      })
-  }, [rows, type, isFav, regions, query, here])
+  }, [rows, favOnly, shopKinds, goodsTypes, goodsOfShop, isFav, regions, query])
 
   const byName = (a, b) => a.account.display_name.localeCompare(b.account.display_name, 'ko')
   const sortList = (list) => list.slice().sort(sort === 'name' ? byName : (a, b) => b.latest - a.latest || byName(a, b))
 
-  // 내 주변: 5km 안 가까운 순, 없으면 가까운 10곳
-  const near = useMemo(() => {
-    if (area !== 'near' || !here) return null
-    const withDist = filtered.filter((r) => r.dist != null).sort((a, b) => a.dist - b.dist)
-    const inside = withDist.filter((r) => r.dist <= NEAR_KM)
-    return inside.length ? { list: inside, fallback: false } : { list: withDist.slice(0, 10), fallback: true }
-  }, [area, here, filtered])
-
-  const flat = area !== 'near' && (query.trim() !== '' || type === '★')
+  const flat = query.trim() !== '' || favOnly
 
   // 시·도 묶음 (매장 수 많은 순, 지점이 여러 시·도에 있으면 각각에 나옴)
   const sections = useMemo(() => {
@@ -138,27 +108,6 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
     track('filter', 'shop_section', { value: sido, on: next.has(sido) })
   }
 
-  const pickArea = (id) => {
-    track('filter', 'shop_area', { value: id ?? 'all' })
-    if (id !== 'near') {
-      setArea(id)
-      if (id) setOpened(new Set([...openSet, id]))
-      return
-    }
-    if (here) return setArea('near')
-    if (!navigator.geolocation) return setLocState('denied')
-    setLocState('asking')
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setHere({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setLocState('idle')
-        setArea('near')
-      },
-      () => setLocState('denied'),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
-    )
-  }
-
   const card = (r, key) => (
     <ShopCard key={key ?? r.account.username} r={r} now={now} fav={isFav(r.account.username)} onToggleFav={onToggleFav} onShopOpen={onShopOpen} />
   )
@@ -177,69 +126,17 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
     )
   }
 
-  // 온라인 매장은 지역 칩 맨 앞(내 주변 옆)에 고정
-  const online = sections.find((s) => s.sido === ONLINE)
-  const shownSections = area && area !== 'near' ? sections.filter((s) => s.sido === area) : sections
-  const empty = area === 'near' ? !near || near.list.length === 0 : filtered.length === 0
+  const shownSections = sections
+  const empty = filtered.length === 0
 
   return (
     <div className="shop-dir">
       <div className="shop-dir-tools">
-        <div className="chips" role="group" aria-label="매장 종류">
-          {/* 칩 순서 기준: 전체 → 특별 보기(아이콘, 자리 고정) → 일반 항목 */}
-          {[null, '★', ...(types.length > 1 ? types : [])].map((t) => (
-            <button
-              key={t ?? 'all'}
-              type="button"
-              className={`chip${type === t ? ' on' : ''}${t === '★' ? ' chip-fav' : ''}`}
-              aria-pressed={type === t}
-              onClick={() => {
-                setType(t)
-                track('filter', 'shop_type', { value: t ?? 'all' })
-              }}
-            >
-              {t === '★' ? (
-                <>
-                  <HeartIcon filled /> 단골 매장 {favCount}
-                </>
-              ) : (
-                t ?? '전체'
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="chips area-chips" role="group" aria-label="지역">
-          <button type="button" className={`chip${area === null ? ' on' : ''}`} aria-pressed={area === null} onClick={() => pickArea(null)}>
-            전체
-          </button>
-          <button type="button" className={`chip chip-near${area === 'near' ? ' on' : ''}`} aria-pressed={area === 'near'} onClick={() => pickArea('near')}>
-            {locState === 'asking' ? '위치 찾는 중…' : '📍 내 주변'}
-          </button>
-          {online && (
-            <button type="button" className={`chip chip-near${area === ONLINE ? ' on' : ''}`} aria-pressed={area === ONLINE} onClick={() => pickArea(ONLINE)}>
-              🛒 온라인 <span className="chip-count">{online.shops.length}</span>
-            </button>
-          )}
-          {sections
-            .filter((s) => s.sido !== '지역 미정' && s.sido !== ONLINE)
-            .map((s) => (
-              <button key={s.sido} type="button" className={`chip${area === s.sido ? ' on' : ''}`} aria-pressed={area === s.sido} onClick={() => pickArea(s.sido)}>
-                {s.sido} <span className="chip-count">{s.shops.length}</span>
-              </button>
-            ))}
-        </div>
-        {locState === 'denied' && <p className="shop-dir-note">위치를 가져오지 못했어요. 브라우저에서 위치 권한을 허용하면 내 주변 매장을 볼 수 있어요.</p>}
         <div className="toolbar">
           <span className="result-count">
-            {area === 'near' && near
-              ? near.fallback
-                ? `${NEAR_KM}km 안에 매장이 없어 가까운 ${near.list.length}곳`
-                : `${NEAR_KM}km 안 ${near.list.length}곳`
-              : filtered.length === rows.length
-                ? `매장 ${rows.length}곳`
-                : `${filtered.length} / ${rows.length}곳`}
+            {filtered.length === rows.length ? `매장 ${rows.length}곳` : `${filtered.length} / ${rows.length}곳`}
           </span>
-          {area !== 'near' && (
+          {(
             <div className="segmented" role="group" aria-label="매장 정렬">
               {SORTS.map((s) => (
                 <button
@@ -262,27 +159,18 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
 
       {empty ? (
         <div className="state">
-          <p>{type === '★' && favCount === 0 ? '아직 단골 매장이 없어요. 매장 카드의 하트를 눌러 단골 매장을 추가해 보세요.' : '조건에 맞는 매장이 없습니다.'}</p>
-          {(type === '★' || area) && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setType(null)
-                setArea(null)
-              }}
-            >
+          <p>{favOnly && favCount === 0 ? '아직 단골 매장이 없어요. 매장 카드의 하트를 눌러 단골 매장을 추가해 보세요.' : '조건에 맞는 매장이 없습니다.'}</p>
+          {(favOnly || shopKinds.length > 0 || goodsTypes.length > 0 || regions.length > 0) && (
+            <button type="button" className="btn" onClick={onClearFilters}>
               전체 매장 보기
             </button>
           )}
         </div>
-      ) : area === 'near' ? (
-        <ul className="shop-cards">{near.list.map((r) => card(r))}</ul>
       ) : flat ? (
         pageOf('flat', sortList(filtered))
       ) : (
         shownSections.map((s) => {
-          const open = area === s.sido || openSet.has(s.sido)
+          const open = openSet.has(s.sido)
           const sub = subPick[s.sido]
           const list = sortList(sub ? s.shops.filter((r) => r.regions.includes(sub)) : s.shops)
           return (

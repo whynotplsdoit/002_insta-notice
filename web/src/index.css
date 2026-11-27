@@ -11,6 +11,7 @@
   --accent: var(--brand-pink);
   --accent-soft: #fde8f2;
   --chip: #eeeef4;
+  --panel: #e4e4ee; /* 묶음 바탕: 일정순/최신순 같은 묶음 버튼, 세부 지역 칸 (칩보다 살짝 진하게) */
   /* 머리글: 로고와 같은 네이비 */
   --header-bg: var(--brand-navy);
   --header-text: #ffffff;
@@ -40,6 +41,7 @@
     --accent: #f26aa8;
     --accent-soft: #42213f;
     --chip: #2c2c4e;
+    --panel: #2c2c4e;
     --header-bg: #20203e;
     --header-line: #313154;
     --header-input: #2a2a4a;

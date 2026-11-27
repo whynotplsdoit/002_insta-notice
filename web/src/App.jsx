@@ -9,11 +9,11 @@ import ShopInfo from './ShopInfo.jsx'
 import PostDetail from './PostDetail.jsx'
 import InstallPrompt from './InstallPrompt.jsx'
 import { track } from './track.js'
-import { BoxIcon, HeartIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon, StoreIcon } from './icons.jsx'
+import { BoxIcon, MapPinIcon, MegaphoneIcon, RadarIcon, SearchIcon, SlidersIcon } from './icons.jsx'
 import MapView from './MapView.jsx'
 import ShopList from './ShopList.jsx'
 import { useFavorites } from './favorites.jsx'
-import { groupRegions, ONLINE } from './regions.js'
+import { groupRegions, ONLINE, shopTypeOf, shopTypeRank } from './regions.js'
 import { GROUPS, scheduleOf, sortByPosted, sortBySchedule } from './sort.js'
 
 const SORTS = [
@@ -24,11 +24,14 @@ const SORTS = [
 const TABS = [
   { id: '전체', label: '전체', Icon: RadarIcon },
   { id: '입고', label: '입고', Icon: BoxIcon },
-  { id: '콜라보·팝업', label: '콜라보·팝업', Icon: StoreIcon },
-  { id: '이벤트·안내', label: '이벤트·안내', Icon: MegaphoneIcon },
+  { id: '행사', label: '행사', Icon: MegaphoneIcon },
   { id: 'map', label: '매장', Icon: MapPinIcon }, // 글 목록 대신 매장 [목록 | 지도] (예전 저장값과 맞추려고 id 는 map 유지)
 ]
 const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
+// 글 분류(DB category) → 메뉴. 행사 = 콜라보·팝업 + 이벤트·안내
+// TODO(배포 때): 크롤러가 '이벤트·안내'를 '행사'와 '안내'로 나누면 '안내'는 메뉴 없이 전체에서만 보이게
+const TAB_OF_CATEGORY = { 입고: '입고', '콜라보·팝업': '행사', '이벤트·안내': '행사' }
+const tabOf = (category) => TAB_OF_CATEGORY[category] ?? category
 const STORAGE_KEY = 'goods-feed:filters:v2'
 const SEEN_KEY = 'goods-radar:tab-seen' // 분류별로 마지막에 본 오늘 글의 수집 시각 (메뉴 핑크 점)
 const CONTACT_EMAIL = 'whynot.plsdoit@gmail.com' // 게시 중단 요청 받는 메일
@@ -47,6 +50,11 @@ function loadSaved() {
   }
 }
 
+// 필터 묶음 제목
+function FilterLegend({ label }) {
+  return <legend className="filter-legend">{label}</legend>
+}
+
 export default function App() {
   if (!configured) {
     return (
@@ -62,7 +70,8 @@ export default function App() {
 function Feed() {
   const { posts, accounts, branches, pending, showPending, status, live, reload } = usePosts()
   const saved = useMemo(loadSaved, [])
-  const [tab, setTab] = useState(saved.tab ?? '전체')
+  // 예전 메뉴(콜라보·팝업, 이벤트·안내)를 보던 사람은 행사로
+  const [tab, setTab] = useState(() => (TABS.some((t) => t.id === tabOf(saved.tab)) ? tabOf(saved.tab) : '전체'))
   const [types, setTypes] = useState(saved.types ?? [])
   const [regions, setRegions] = useState(saved.regions ?? [])
   // 즐겨찾기 매장 (이 브라우저에만 저장) + "즐겨찾기 매장 소식만" 켜기
@@ -70,6 +79,7 @@ function Feed() {
   const { favorites, isFav, toggleFav } = useFavorites()
   const [favOnly, setFavOnly] = useState(saved.favOnly ?? (Array.isArray(saved.shops) && saved.shops.length > 0))
   const [openSido, setOpenSido] = useState(null) // 지역 필터에서 펼친 시·도
+  const [shopKinds, setShopKinds] = useState([]) // 매장 종류 필터 (여러 개, 비어 있으면 전체)
   const [toast, setToast] = useState('')
   const [query, setQuery] = useState('')
   const [hidePast, setHidePast] = useState(saved.hidePast ?? false)
@@ -169,6 +179,21 @@ function Feed() {
     return m
   }, [posts])
 
+  // 필터 규칙: 같은 묶음 안에서는 여러 개 중 하나라도(또는), 묶음끼리는 모두 만족(그리고). 아무것도 안 고르면 전체
+  // 매장 종류 (모든 메뉴 공통)
+  const shopTypes = useMemo(() => [...new Set(accounts.map(shopTypeOf))].sort((a, b) => shopTypeRank(a) - shopTypeRank(b)), [accounts])
+  const shopKindOk = (username) => !shopKinds.length || shopKinds.includes(shopTypeOf(shopOf.get(username)))
+  // 매장이 다루는 상품 종류 = 그 매장 글에 붙은 상품 종류 (매장 탭·지도에서 상품 종류 필터에 씀)
+  const goodsOfShop = useMemo(() => {
+    const m = new Map()
+    for (const p of posts) {
+      if (!m.has(p.account_username)) m.set(p.account_username, new Set())
+      for (const t of p.goods_type) m.get(p.account_username).add(t)
+    }
+    return m
+  }, [posts])
+  const shopGoodsOk = (username) => !types.length || types.some((t) => goodsOfShop.get(username)?.has(t))
+
   const postRegions = (p) => {
     const list = p.branches.map((name) => regionOf.get(`${p.account_username}/${name}`)).filter(Boolean)
     return list.length ? list : branches.filter((b) => b.account_username === p.account_username).map((b) => b.region)
@@ -178,10 +203,12 @@ function Feed() {
     const q = query.trim().toLowerCase().replace(/\s+/g, '')
     const now = Date.now()
     return posts.filter((p) => {
-      if (tab === '전체' ? false : p.category !== tab) return false
-      if (tab === '입고' && types.length && !p.goods_type.some((t) => types.includes(t))) return false
+      if (tab !== '전체' && tabOf(p.category) !== tab) return false
+      // 상품 종류: 모든 메뉴 (지금은 입고 글에만 상품 종류가 붙어서 행사에서 고르면 비어 있음 — 배포 때 크롤러 수정)
+      if (types.length && !p.goods_type.some((t) => types.includes(t))) return false
       if (favOnly && !favorites.includes(p.account_username)) return false
       if (regions.length && !postRegions(p).some((r) => regions.includes(r))) return false
+      if (!shopKindOk(p.account_username)) return false
       if (hidePast && p.starts_at && scheduleOf(p, now).group === 'past') return false
       if (q) {
         const hay = [p.caption, ...p.works, shopOf.get(p.account_username)?.display_name]
@@ -193,7 +220,7 @@ function Feed() {
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts, tab, types, regions, favOnly, favorites, query, hidePast, shopOf, regionOf])
+  }, [posts, tab, types, regions, shopKinds, favOnly, favorites, query, hidePast, shopOf, regionOf])
 
   const sorted = useMemo(
     () => (sortMode === 'posted' ? sortByPosted(visible) : sortBySchedule(visible, now)),
@@ -206,9 +233,14 @@ function Feed() {
   const mapBranches = useMemo(
     () =>
       branches.filter(
-        (b) => regions.length === 0 || regions.includes(b.region),
+        (b) =>
+          (regions.length === 0 || regions.includes(b.region)) &&
+          shopKindOk(b.account_username) &&
+          shopGoodsOk(b.account_username) &&
+          (!favOnly || favorites.includes(b.account_username)),
       ),
-    [branches, regions],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [branches, regions, shopKinds, types, goodsOfShop, favOnly, favorites, shopOf],
   )
 
   // 구역별 개수 (오늘·진행 중 / 앞으로 예정 / 지난 소식)
@@ -260,7 +292,7 @@ function Feed() {
 
   const counts = useMemo(() => {
     const c = { 전체: posts.length }
-    for (const p of posts) c[p.category] = (c[p.category] ?? 0) + 1
+    for (const p of posts) c[tabOf(p.category)] = (c[tabOf(p.category)] ?? 0) + 1
     return c
   }, [posts])
 
@@ -273,7 +305,8 @@ function Feed() {
     for (const p of posts) {
       if (Date.parse(p.posted_at) < todayStart) continue
       const t = Date.parse(p.first_seen_at) || 0
-      if (t > (m[p.category] ?? 0)) m[p.category] = t
+      const k = tabOf(p.category)
+      if (t > (m[k] ?? 0)) m[k] = t
     }
     return m
   }, [posts, todayStart])
@@ -313,18 +346,20 @@ function Feed() {
     }
     // "새 소식 N개" 버튼 뒤에서 기다리는 글(아직 목록에 안 넣은 글)은 못 본 글이라 무조건 점
     for (const p of pending) {
-      if (Date.parse(p.posted_at) >= todayStart) r[p.category] = r['전체'] = true
+      if (Date.parse(p.posted_at) >= todayStart) r[tabOf(p.category)] = r['전체'] = true
     }
     return r
   }, [seen, latestByCat, pending, todayStart])
 
   const toggle = (list, setList, value) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value])
-  const activeFilters = types.length + regions.length + (favOnly ? 1 : 0) + (hidePast ? 1 : 0)
+  const activeFilters = types.length + regions.length + shopKinds.length + (favOnly ? 1 : 0) + (hidePast ? 1 : 0)
 
   const resetFilters = () => {
     setTypes([])
     setRegions([])
+    setOpenSido(null)
+    setShopKinds([])
     setFavOnly(false)
     setHidePast(false)
     setQuery('')
@@ -344,32 +379,17 @@ function Feed() {
 
   const filters = (
     <div className="filters">
-      {tab === '입고' && (
-        <fieldset>
-          <legend>상품 종류</legend>
-          <div className="chips">
-            {GOODS_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                className={`chip${types.includes(t) ? ' on' : ''}`}
-                aria-pressed={types.includes(t)}
-                onClick={() => {
-                  toggle(types, setTypes, t)
-                  track('filter', 'type', { value: t, on: !types.includes(t) })
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      )}
+      {/* 지역: 모든 메뉴 공통이라 맨 위 고정 */}
       <fieldset>
-        <legend>
-          지역{' '}
-          {regions.length > 0 && <span className="legend-note">{regions.join('·')}</span>}
-        </legend>
+        <FilterLegend
+          label="지역"
+          count={regions.length}
+          onClear={() => {
+            setRegions([])
+            setOpenSido(null)
+            track('filter', 'region_clear')
+          }}
+        />
         {/* 시·도로 묶음: 지역이 하나뿐인 시·도는 바로 고르고, 여러 곳이면 펼쳐서 고름 */}
         <div className="chips">
           {regionGroups.map(([sido, list]) => {
@@ -390,7 +410,7 @@ function Feed() {
                   } else setOpenSido(openSido === sido ? null : sido)
                 }}
               >
-                {sido === ONLINE ? '🛒 ' : ''}{single ? (list[0] === sido ? sido : `${sido} ${list[0]}`) : sido}
+                {sido === ONLINE ? '🛒 ' : ''}{sido /* 매장 탭처럼 시·도 이름만 */}
                 {!single && (picked ? ` ${picked}` : ' ▾')}
               </button>
             )
@@ -432,63 +452,89 @@ function Feed() {
           </div>
         )}
       </fieldset>
+      {/* 매장 종류: 모든 메뉴 공통, 여러 개 선택 */}
       <fieldset>
-        <legend>단골 매장</legend>
-        <label className={`check fav-only${favOnly ? ' on' : ''}`}>
-          <input
-            type="checkbox"
-            checked={favOnly}
-            onChange={(e) => {
-              setFavOnly(e.target.checked)
-              track('filter', 'favorite_only', { on: e.target.checked })
+        <FilterLegend
+          label="매장 종류"
+          count={shopKinds.length}
+          onClear={() => {
+            setShopKinds([])
+            track('filter', 'shop_type_clear')
+          }}
+        />
+        <div className="chips">
+          {shopTypes.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`chip${shopKinds.includes(t) ? ' on' : ''}`}
+              aria-pressed={shopKinds.includes(t)}
+              onClick={() => {
+                toggle(shopKinds, setShopKinds, t)
+                track('filter', 'shop_type', { value: t, on: !shopKinds.includes(t) })
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {/* 상품 종류: 모든 메뉴 공통, 여러 개 선택 (매장 탭에서는 그 상품을 다루는 매장) */}
+      {(
+        <fieldset>
+          <FilterLegend
+            label="상품 종류"
+            count={types.length}
+            onClear={() => {
+              setTypes([])
+              track('filter', 'type_clear')
             }}
           />
-          <HeartIcon filled /> 단골 매장 소식만
-        </label>
-        {favorites.length > 0 ? (
-          <ul className="fav-list">
-            {favorites.map((u) => (
-              <li key={u}>
-                <span>{shopOf.get(u)?.display_name ?? u}</span>
-                <button type="button" aria-label={`${shopOf.get(u)?.display_name ?? u} 단골 매장 해제`} onClick={() => onToggleFav(u)}>
-                  ✕
-                </button>
-              </li>
+          <div className="chips">
+            {GOODS_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={`chip${types.includes(t) ? ' on' : ''}`}
+                aria-pressed={types.includes(t)}
+                onClick={() => {
+                  toggle(types, setTypes, t)
+                  track('filter', 'type', { value: t, on: !types.includes(t) })
+                }}
+              >
+                {t}
+              </button>
             ))}
-          </ul>
-        ) : (
-          <p className="fav-empty">
-            매장 탭이나 매장 정보 창의 하트를 눌러 단골 매장을 추가해 보세요.{' '}
-            <button type="button" className="link-btn" onClick={goShops}>
-              매장 보러 가기
-            </button>
-          </p>
-        )}
-        <button
-          type="button"
-          className="add-shop"
-          onClick={() => {
-            setRequestOpen(true)
-            track('request_open')
-          }}
-        >
-          + 매장 추가 신청
-        </button>
-      </fieldset>
-      {(
-        <label className="check">
-          <input type="checkbox" checked={hidePast} onChange={(e) => {
-            setHidePast(e.target.checked)
-            track('filter', 'hide_past', { on: e.target.checked })
-          }} />
-          끝난 행사 숨기기
-        </label>
+          </div>
+        </fieldset>
       )}
       {activeFilters > 0 && (
         <button type="button" className="link-btn" onClick={resetFilters}>
           필터 초기화
         </button>
       )}
+      {/* 켜고 끄는 보기 설정: 필터 맨 아래 고정 */}
+      <div className="filter-toggles">
+        {[
+          { id: 'favorite_only', label: '단골 매장 소식만 보기', on: favOnly, set: setFavOnly },
+          { id: 'hide_past', label: '끝난 행사 숨기기', on: hidePast, set: setHidePast },
+        ].map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="switch"
+            aria-checked={t.on}
+            className={`toggle-row${t.on ? ' on' : ''}`}
+            onClick={() => {
+              t.set(!t.on)
+              track('filter', t.id, { on: !t.on })
+            }}
+          >
+            <span>{t.label}</span>
+            <span className="switch" aria-hidden="true" />
+          </button>
+        ))}
+      </div>
     </div>
   )
 
@@ -594,6 +640,16 @@ function Feed() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                className="add-shop"
+                onClick={() => {
+                  setRequestOpen(true)
+                  track('request_open')
+                }}
+              >
+                + 매장 추가 신청
+              </button>
             </div>
           )}
           {status === 'ready' && isMap && shopView === 'list' && (
@@ -602,6 +658,11 @@ function Feed() {
               branches={branches}
               posts={posts}
               regions={regions}
+              shopKinds={shopKinds}
+              goodsTypes={types}
+              goodsOfShop={goodsOfShop}
+              favOnly={favOnly}
+              onClearFilters={resetFilters}
               isFav={isFav}
               favCount={favorites.length}
               onToggleFav={onToggleFav}

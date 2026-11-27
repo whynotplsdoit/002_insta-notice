@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 
-const LIMIT = 500
+const PAGE = 1000 // DB가 한 번에 주는 최대 줄 수 → 게시 중인 글 전부를 이만큼씩 나눠 받음
 const POLL_MS = 5 * 60 * 1000
 const COLUMNS =
   'code, account_username, url, posted_at, media_type, pinned, caption, category, goods_type, works, branches, starts_at, ends_at, image_path, first_seen_at, updated_at'
@@ -29,12 +29,29 @@ const writeCache = (c) => {
     // 저장 공간이 없으면 그냥 다음에 전부 받음
   }
 }
+// 게시 중인 글 전부 (최신 올린 순). 개수 제한 없이 PAGE 씩 끝까지
+async function selectAll(columns) {
+  const rows = []
+  for (let from = 0; ; from += PAGE) {
+    const r = await supabase
+      .from('posts')
+      .select(columns)
+      .eq('hidden', false)
+      .order('posted_at', { ascending: false })
+      .order('code')
+      .range(from, from + PAGE - 1)
+    if (r.error) return { error: r.error }
+    rows.push(...r.data)
+    if (r.data.length < PAGE) return { data: rows }
+  }
+}
+
 const maxUpdated = (rows) => rows.reduce((m, r) => (r.updated_at && r.updated_at > m ? r.updated_at : m), '')
 
 // 지난번 데이터 + 바뀐 글만 받아서 합치기. 반환 null 이면 전부 새로 받아야 함
 async function loadIncremental(cache) {
   const [codes, changed] = await Promise.all([
-    supabase.from('posts').select('code').eq('hidden', false).order('posted_at', { ascending: false }).limit(LIMIT),
+    selectAll('code'),
     supabase.from('posts').select(COLUMNS).eq('hidden', false).gte('updated_at', cache.cursor),
   ])
   if (codes.error || changed.error) return null
@@ -81,7 +98,7 @@ export function usePosts() {
     let posts = p
     let fullAt = cache?.fullAt
     if (!posts) {
-      const r = await supabase.from('posts').select(COLUMNS).eq('hidden', false).order('posted_at', { ascending: false }).limit(LIMIT)
+      const r = await selectAll(COLUMNS)
       if (r.error) return cache ? undefined : setStatus('error')
       posts = r.data
       fullAt = Date.now()

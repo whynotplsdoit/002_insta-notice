@@ -42,3 +42,8 @@ export function groupRegions(branches) {
     .sort((a, b) => (b[0] === ONLINE) - (a[0] === ONLINE) || b[2] - a[2] || a[0].localeCompare(b[0], 'ko'))
     .map(([sido, list]) => [sido, list])
 }
+
+// ---------- 매장 종류 (필터 창 · 매장 탭이 같이 씀) ----------
+export const SHOP_TYPE_ORDER = ['굿즈샵', '가챠샵', '콜라보카페', '소품·기타'] // 칩 순서 (관리자 ACCOUNT_TYPES 와 같게)
+export const shopTypeRank = (t) => (SHOP_TYPE_ORDER.includes(t) ? SHOP_TYPE_ORDER.indexOf(t) : SHOP_TYPE_ORDER.length)
+export const shopTypeOf = (account) => account?.account_type || '굿즈샵'
