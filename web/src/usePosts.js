@@ -2,6 +2,7 @@
 // - 실시간: 새 글이 들어오면 바로 "새 소식 N개" 표시 (누르면 목록에 반영)
 // - 예비: 실시간 연결이 끊겼을 때만 5분마다, 그리고 화면으로 돌아올 때 새 글 확인 (글 코드만 먼저 받아 봄)
 // - 전송량 아끼기: 지난번 받은 데이터를 브라우저에 저장해 두고, 다시 오면 바뀐 글만 받음
+//   매장·지점(100곳 남짓, 작음)은 열 때마다 새로 받음 — 관리자가 고친 지역·종류가 바로 보이게
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 
@@ -12,7 +13,6 @@ const COLUMNS =
 const ACCOUNT_COLUMNS = 'username, display_name, account_type, ig_full_name, bio, external_url, profile_image_path, profile_updated_at'
 const CACHE_KEY = 'goods-radar-data-v1'
 const FULL_RELOAD_MS = 24 * 60 * 60 * 1000 // 하루 지나면 전부 새로 받음 (혹시 놓친 변경 정리)
-const META_RELOAD_MS = 6 * 60 * 60 * 1000 // 매장·지점 정보는 6시간마다
 
 const readCache = () => {
   try {
@@ -73,11 +73,10 @@ export function usePosts() {
     }
     if (cache) show(cache) // 지난번 데이터로 바로 화면을 띄우고 뒤에서 갱신
 
-    const metaStale = !cache || Date.now() - cache.metaAt > META_RELOAD_MS
     const [p, a, b] = await Promise.all([
       cache ? loadIncremental(cache) : null,
-      metaStale ? supabase.from('accounts').select(ACCOUNT_COLUMNS).eq('hidden', false) : null,
-      metaStale ? supabase.from('branches').select('*').order('id') : null,
+      supabase.from('accounts').select(ACCOUNT_COLUMNS).eq('hidden', false),
+      supabase.from('branches').select('*').order('id'),
     ])
     let posts = p
     let fullAt = cache?.fullAt
@@ -87,14 +86,13 @@ export function usePosts() {
       posts = r.data
       fullAt = Date.now()
     }
-    if (a?.error || b?.error) return cache ? undefined : setStatus('error')
+    if (a.error || b.error) return cache ? undefined : setStatus('error')
     const next = {
       fullAt,
       cursor: maxUpdated(posts) || cache?.cursor || '',
       posts,
-      accounts: a ? a.data : cache.accounts,
-      branches: b ? b.data : cache.branches,
-      metaAt: metaStale ? Date.now() : cache.metaAt,
+      accounts: a.data,
+      branches: b.data,
     }
     writeCache(next)
     show(next)
