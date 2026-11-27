@@ -200,15 +200,7 @@ function findDates(body, postedAt) {
   return { startsAt: (near ?? dates[0]).date.toISOString(), endsAt: null }
 }
 
-// ---------- 기타 글 처리 ----------
-// 본문이 사실상 없음: 해시태그·반복 문구·멘션·링크·이모지를 빼면 글자가 거의 없음 (예: "🎁✨ #굿즈샵 #홍대")
-export function isEmptyBody(body) {
-  const text = withoutHashtags(body).replace(/@[\w.]+/g, ' ').replace(/https?:\/\/\S+/g, ' ')
-  const hangul = (text.match(/[가-힣]/g) ?? []).length
-  const latin = (text.match(/[A-Za-z0-9]/g) ?? []).length
-  return hangul < 2 && latin < 4
-}
-
+// ---------- 욕설·비방 ----------
 // 욕설·비방 글: 사이트에 올리지 않고(숨김) 관리자 '기타 검토'로 보냄. 나머지 기타 글은 검토 없이 바로 게시
 // "미친 가격"처럼 홍보에도 쓰는 말은 넣지 않음 (잘못 걸리면 좋은 글이 숨겨지므로 확실한 욕만)
 const ABUSE_RE =
@@ -218,7 +210,7 @@ export function isAbusive(caption) {
 }
 
 // ---------- 전체 ----------
-// 기타 글에는 emptyBody(본문 없음 → 저장하지 않음)를 함께 돌려줌. abusive(욕설·비방 → 숨기고 검토)는 모든 분류에 표시
+// abusive(욕설·비방 → 숨기고 검토)를 함께 돌려줌. 본문 없는 글도 그대로 분류 (대부분 '기타')
 export function classifyPosts(account, posts, works) {
   const boilerplate = findBoilerplate(posts)
   return posts.map((post) => {
@@ -236,7 +228,6 @@ export function classifyPosts(account, posts, works) {
       startsAt,
       endsAt,
       newTagCandidates,
-      emptyBody: category === '기타' && isEmptyBody(body),
       abusive: isAbusive(post.caption),
     }
   })

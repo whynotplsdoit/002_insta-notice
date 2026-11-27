@@ -1,5 +1,4 @@
 // 오래된 글 자동 삭제 (DB와 사진 저장소에서 완전히 지움)
-// 본문이 비어 있는 글은 처음부터 수집하지 않습니다 (store.mjs).
 //
 // 규칙 (모든 분류 공통, 날짜는 한국 시각 하루 단위)
 //   1) 모든 글은 최대 3달: 기준일(시작일, 없으면 인스타에 올린 날)로부터 3달이 지나면 삭제
@@ -83,9 +82,6 @@ export async function recordDeleted(posts) {
     .upsert(posts.map((p) => ({ code: p.code, account_username: p.account_username ?? p.owner ?? null })))
   if (rec.error) throw new Error(`삭제 기록 저장: ${rec.error.message}`)
 }
-
-// 본문이 비어 있는 글 (수집하지 않음)
-export const hasNoCaption = (post) => !(post.caption ?? '').trim()
 
 // 반환: 지운 글 목록 [{ code, account_username, category }]
 export async function deleteExpiredPosts(now = Date.now()) {
