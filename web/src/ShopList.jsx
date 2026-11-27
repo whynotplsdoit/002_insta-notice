@@ -185,7 +185,8 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
     <div className="shop-dir">
       <div className="shop-dir-tools">
         <div className="chips" role="group" aria-label="매장 종류">
-          {['★', null, ...(types.length > 1 ? types : [])].map((t) => (
+          {/* 칩 순서 기준: 전체 → 특별 보기(아이콘, 자리 고정) → 일반 항목 */}
+          {[null, '★', ...(types.length > 1 ? types : [])].map((t) => (
             <button
               key={t ?? 'all'}
               type="button"
@@ -201,6 +202,9 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
           ))}
         </div>
         <div className="chips area-chips" role="group" aria-label="지역">
+          <button type="button" className={`chip${area === null ? ' on' : ''}`} aria-pressed={area === null} onClick={() => pickArea(null)}>
+            전체
+          </button>
           <button type="button" className={`chip chip-near${area === 'near' ? ' on' : ''}`} aria-pressed={area === 'near'} onClick={() => pickArea('near')}>
             {locState === 'asking' ? '위치 찾는 중…' : '📍 내 주변'}
           </button>
@@ -209,9 +213,6 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
               🛒 온라인 <span className="chip-count">{online.shops.length}</span>
             </button>
           )}
-          <button type="button" className={`chip${area === null ? ' on' : ''}`} aria-pressed={area === null} onClick={() => pickArea(null)}>
-            전체
-          </button>
           {sections
             .filter((s) => s.sido !== '지역 미정' && s.sido !== ONLINE)
             .map((s) => (
