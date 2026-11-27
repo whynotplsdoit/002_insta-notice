@@ -18,7 +18,10 @@
     "naver": "node --env-file=.env crawler/naver-sync.mjs",
     "kakao:login": "node --env-file=.env crawler/kakao-login.mjs",
     "shrink:images": "node --env-file=.env crawler/shrink-existing.mjs",
-    "make:thumbs": "node --env-file=.env crawler/make-thumbs.mjs"
+    "make:thumbs": "node --env-file=.env crawler/make-thumbs.mjs",
+    "threads:connect": "node --env-file=.env crawler/threads-connect.mjs",
+    "threads:post": "node --env-file=.env crawler/threads-post.mjs",
+    "threads:auth": "node --env-file=.env crawler/threads-auth.mjs"
   },
   "devDependencies": {
     "playwright": "^1.65.1"
