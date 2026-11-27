@@ -19,7 +19,7 @@ import { reviewRequest, autoAddedToday, AUTO_ADD_PER_DAY } from './review-reques
 import { openNaverBrowser } from './naver.mjs'
 import { log } from './log.mjs'
 import { NETWORK_ERR, retryNetwork, shortError } from './retry.mjs'
-import { cleanupRecords, deleteExpiredPosts, hasNoCaption, loadDeletedCodes, summarize } from './cleanup.mjs'
+import { cleanupRecords, deleteExpiredPosts, loadDeletedCodes, summarize } from './cleanup.mjs'
 
 const ACTIVE_HOURS = [9, 24] // 한국 시각
 const SAFETY_HOURS = 24 // 이 시간 넘게 직접 확인하지 않은 매장은 피드와 별개로 확인
@@ -163,8 +163,8 @@ try {
 
   // 2) 팔로잉 피드
   const feed = await retryNetwork('피드 확인', () => fetchFollowingFeed(context, known))
-  // 본문 없는 글은 새 글로 치지 않음 (수집하지 않으므로 매장 페이지를 열 필요 없음)
-  const fresh = feed.filter((p) => byUsername.has(p.owner) && !known.has(p.code) && !hasNoCaption(p))
+  // 본문 없는 글(사진·릴스만)도 새 글로 침 → 기타로 게시
+  const fresh = feed.filter((p) => byUsername.has(p.owner) && !known.has(p.code))
   const targets = [...new Set(fresh.map((p) => p.owner))]
   await log(
     `피드 확인: 글 ${feed.length}개 중 새 글 ${fresh.length}개` +

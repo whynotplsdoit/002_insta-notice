@@ -3,7 +3,7 @@
 import fs from 'node:fs/promises'
 import { db } from './db.mjs'
 import { classifyPosts } from './classify.mjs'
-import { hasNoCaption, loadDeletedCodes, recordDeleted } from './cleanup.mjs'
+import { loadDeletedCodes } from './cleanup.mjs'
 import { CACHE_SECONDS, POST_WIDTH, PROFILE_WIDTH, THUMB_WIDTH, shrinkImage, thumbPath } from './shrink.mjs'
 
 const BUCKET = 'post-images'
@@ -113,13 +113,10 @@ const codeOf = (post) => post.code ?? post.url.match(/\/(?:p|reel)\/([^/]+)/)?.[
 // 관리자가 분류를 직접 고친 글(manual)은 분류 칸을 덮어쓰지 않습니다.
 export async function savePosts(account, posts, works) {
   const withCode = posts.map((p) => ({ ...p, code: codeOf(p) })).filter((p) => p.code)
-  // 본문이 없는 글은 수집하지 않고, 다시 확인하지 않도록 기록만 해 둠
+  // 본문이 없는 글(사진·릴스만)도 저장 → 분류 규칙에 따라 대부분 '기타'로 게시
   const deleted = await loadDeletedCodes()
-  const empty = withCode.filter((p) => hasNoCaption(p) && !deleted.has(p.code))
-  await recordDeleted(empty.map((p) => ({ code: p.code, account_username: account.username })))
-  for (const p of empty) deleted.add(p.code)
-  // 분류(반복 문구 찾기)는 최근 글 전체로 하고, 저장은 지운 글·본문 없는 글을 빼고 함
-  let classified = classifyPosts(account, withCode, works).filter((p) => !deleted.has(p.code))
+  // 분류(반복 문구 찾기)는 최근 글 전체로 하고, 저장은 지운 글을 빼고 함
+  const classified = classifyPosts(account, withCode, works).filter((p) => !deleted.has(p.code))
 
   const { data: existing, error } = await db
     .from('posts')
@@ -127,11 +124,6 @@ export async function savePosts(account, posts, works) {
     .in('code', classified.map((p) => p.code))
   if (error) throw new Error(`기존 글 확인: ${error.message}`)
   const known = new Map(existing.map((e) => [e.code, e]))
-
-  // '기타' 새 글 중 본문이 사실상 없는 글(해시태그·이모지뿐)은 저장하지 않고 지운 글로 기록
-  const noBody = classified.filter((p) => p.emptyBody && !known.has(p.code))
-  await recordDeleted(noBody.map((p) => ({ code: p.code, account_username: account.username })))
-  classified = classified.filter((p) => !noBody.includes(p))
 
   let imagesUploaded = 0
   const newRows = [] // 처음 들어오는 글
