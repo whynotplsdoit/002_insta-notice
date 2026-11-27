@@ -117,6 +117,7 @@ export default function ShopInfo({ account, branches, posts, focusBranches = [],
               highlight={focused && focusBranches.includes(b.name)}
               defaultOpen={!focused || focusBranches.includes(b.name) || i === 0}
               now={now}
+              link={account.external_url}
             />
           ))}
         </section>
@@ -125,8 +126,43 @@ export default function ShopInfo({ account, branches, posts, focusBranches = [],
   )
 }
 
-function BranchCard({ branch, shopName, multi, highlight, defaultOpen, now }) {
+// 오프라인 매장이 없는 온라인 매장: 지점 지역을 "온라인"으로 둠 (관리자 매장 탭에서 지역에 "온라인")
+export const ONLINE = '온라인'
+
+function OnlineCard({ branch, link }) {
+  return (
+    <div className="branch-card">
+      <div className="branch-head static">
+        <span className="branch-name">🛒 온라인 매장</span>
+        <span className="open-status online">오프라인 매장 없음</span>
+      </div>
+      <div className="branch-body">
+        <p className="branch-addr muted">직접 찾아가는 매장이 없어요. 온라인 스토어나 인스타 DM으로 구매해요.</p>
+        {link && (
+          <div className="branch-actions">
+            <a
+              className="pill-btn naver"
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('map_click', branch.account_username, { branch: ONLINE })}
+            >
+              온라인 스토어 바로가기
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BranchCard({ branch, shopName, multi, highlight, defaultOpen, now, link }) {
   const [open, setOpen] = useState(defaultOpen)
+  if (branch.region === ONLINE) return <OnlineCard branch={branch} link={link} />
+  return <OfflineCard {...{ branch, shopName, multi, highlight, now, open, setOpen }} />
+}
+
+function OfflineCard({ branch, shopName, multi, highlight, now, open, setOpen }) {
   const [showHours, setShowHours] = useState(false)
   const status = openStatus(branch.hours, now)
   const lines = hoursLines(branch.hours)

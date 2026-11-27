@@ -23,7 +23,7 @@ const NEAR_KM = 5
 const TYPE_ORDER = ['굿즈샵', '가챠샵', '콜라보카페', '소품·기타'] // 종류 칩 순서 (관리자 ACCOUNT_TYPES 와 같게)
 const typeRank = (t) => (TYPE_ORDER.includes(t) ? TYPE_ORDER.indexOf(t) : TYPE_ORDER.length)
 // 영업 상태 우선순위 (지점이 여러 곳이면 가장 좋은 상태)
-const STATUS_RANK = { open: 0, before: 1, closed: 2, off: 3, unknown: 4 }
+const STATUS_RANK = { open: 0, before: 1, closed: 2, off: 3, unknown: 4, online: 5 }
 
 // 두 좌표 사이 거리 (km)
 function distanceKm(a, b) {
@@ -63,7 +63,8 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
       r.latest = Math.max(r.latest, new Date(p.posted_at).getTime())
     }
     return [...byShop.values()].map((r) => {
-      const statuses = r.branches.map((b) => openStatus(b.hours, now))
+      // 지역이 "온라인"인 지점 = 오프라인 매장 없음 (ShopInfo ONLINE)
+      const statuses = r.branches.map((b) => (b.region === '온라인' ? { kind: 'online', text: '온라인 매장' } : openStatus(b.hours, now)))
       const status = statuses.sort((a, b) => STATUS_RANK[a.kind] - STATUS_RANK[b.kind])[0] ?? { kind: 'unknown', text: '영업시간 정보 없음' }
       return {
         ...r,

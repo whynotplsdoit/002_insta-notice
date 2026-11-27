@@ -750,9 +750,13 @@
 .open-status.off {
   color: #dc2626;
 }
-.open-status.unknown {
+.open-status.unknown,
+.open-status.online {
   color: var(--muted);
   font-weight: 500;
+}
+.branch-head.static {
+  cursor: default;
 }
 .branch-body {
   display: flex;
