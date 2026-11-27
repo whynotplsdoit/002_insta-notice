@@ -20,6 +20,8 @@ const RECENT_DAYS = 7
 const DAY = 86400000
 const PAGE = 30 // 한 묶음에 처음 보여줄 매장 수
 const NEAR_KM = 5
+const TYPE_ORDER = ['굿즈샵', '가챠샵', '콜라보카페', '소품·기타'] // 종류 칩 순서 (관리자 ACCOUNT_TYPES 와 같게)
+const typeRank = (t) => (TYPE_ORDER.includes(t) ? TYPE_ORDER.indexOf(t) : TYPE_ORDER.length)
 // 영업 상태 우선순위 (지점이 여러 곳이면 가장 좋은 상태)
 const STATUS_RANK = { open: 0, before: 1, closed: 2, off: 3, unknown: 4 }
 
@@ -74,7 +76,7 @@ export default function ShopList({ accounts, branches, posts, regions, query, no
     })
   }, [accounts, branches, posts, now, regionMap])
 
-  const types = useMemo(() => [...new Set(rows.map((r) => r.type))], [rows])
+  const types = useMemo(() => [...new Set(rows.map((r) => r.type))].sort((a, b) => typeRank(a) - typeRank(b)), [rows])
 
   // 종류·필터 창 지역·검색어로 거른 매장 (+ 거리)
   const filtered = useMemo(() => {

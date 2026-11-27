@@ -76,6 +76,15 @@ export function regionFromAddress(address, known = []) {
   return parts[0].replace(/(특별시|광역시|특별자치시|시)$/, '')
 }
 
+// 매장 종류 (2026-11-27 사용자 결정: 굿즈샵 / 가챠샵 / 콜라보카페 / 소품·기타, 피규어는 굿즈샵)
+// 가챠샵: 네이버 업종(오락실·뽑기)이나 이름에 가챠가 있으면
+// 소품·기타: 인스타 이름에 "소품"이 있으면 (예: "목동역 소품샵") — 소개글은 굿즈샵도 "소품"을 자주 써서 안 봄
+export function shopType({ placeName, placeCategory, fullName, username }) {
+  if (/가챠|가차|ガチャ|gacha|뽑기|캡슐토이|오락실/i.test(`${placeName ?? ''} ${placeCategory ?? ''} ${fullName ?? ''} ${username ?? ''}`)) return '가챠샵'
+  if (/소품/.test(fullName ?? '')) return '소품·기타'
+  return '굿즈샵'
+}
+
 // 오늘(한국 날짜) 자동 승인한 수
 // 추가 완료된 신청은 바로 지우므로 신청 표가 아니라 수집 기록(watch.mjs 의 "🔎 매장 신청 @… 자동 승인:")으로 셈
 export async function autoAddedToday() {
@@ -176,10 +185,7 @@ export async function reviewRequest(ig, naver, req, { registered, canAutoAdd, kn
     // 지역은 네이버 주소로만 정함 (신청자가 적은 "서울" 같은 값은 검색 참고만, 신청 창에서는 칸을 뺌)
     region: (regionFromAddress(p?.roadAddress ?? p?.address, knownBranches) || '').slice(0, 20) || null,
     naverPlaceId: placeOk ? p.id : null,
-    // 가챠샵: 네이버 업종(오락실·뽑기)이나 이름에 가챠가 있으면
-    accountType: /가챠|가차|ガチャ|gacha|뽑기|캡슐토이|오락실/i.test(`${p?.name ?? ''} ${p?.category ?? ''} ${acc.fullName ?? ''} ${req.username}`)
-      ? '가챠샵'
-      : '굿즈샵',
+    accountType: shopType({ placeName: p?.name, placeCategory: p?.category, fullName: acc.fullName, username: req.username }),
   }
 
   const goodsOk = goodsPosts >= MIN_GOODS_POSTS || (bioHit && goodsPosts >= 2)

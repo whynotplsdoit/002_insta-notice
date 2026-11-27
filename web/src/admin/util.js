@@ -35,4 +35,6 @@ export const fromKstDate = (d) => (d ? new Date(`${d}T00:00:00+09:00`).toISOStri
 
 export const CATEGORIES = ['입고', '콜라보·팝업', '이벤트·안내', '기타']
 export const GOODS_TYPES = ['쿠지', '가챠', '피규어', '굿즈']
-export const ACCOUNT_TYPES = ['굿즈샵', '가챠샵', '콜라보카페']
+// 매장 종류: 굿즈샵(애니굿즈·피규어·제일복권·리펀 포함) / 가챠샵 / 콜라보카페 / 소품·기타(소품샵·키덜트·TCG·서점 등)
+// 팝업은 매장 종류가 아니라 글 분류(콜라보·팝업)로 다룸. 사이트 매장 탭 순서는 web/src/ShopList.jsx TYPE_ORDER
+export const ACCOUNT_TYPES = ['굿즈샵', '가챠샵', '콜라보카페', '소품·기타']

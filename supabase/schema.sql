@@ -6,7 +6,7 @@
 create table if not exists public.accounts (
   username              text primary key,           -- 인스타 아이디 (예: shirostore_hongdae)
   display_name          text not null,              -- 화면에 보일 이름 (예: 시로상점)
-  account_type          text not null default '굿즈샵', -- 굿즈샵 / 콜라보카페
+  account_type          text not null default '굿즈샵', -- 굿즈샵 / 가챠샵 / 콜라보카페 / 소품·기타
   crawl_interval_hours  int  not null default 6,    -- 수집 간격
   last_crawled_at       timestamptz,                -- 마지막 수집 시각
   created_at            timestamptz not null default now()
